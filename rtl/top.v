@@ -16,9 +16,12 @@
 //   input 0 (Fox): mclk_sel follows the Fox's own MCLK_SEL pin (fox_fsel),
 //                  so the Fox plays from our oscillator: synchronous, the
 //                  ASRC is bypassed (core.v);
+//   input 4 (phono ADC, SYNC_IN4 = 1): the AK5572 gets its MCLK from the
+//                  same oscillator mux, so it is synchronous too: no ASRC;
+//                  the meter sees our own family, so the clock never moves;
 //   other inputs:  the frequency meter (sys_clk) measures the source and
-//                  mclk_sel picks its family; the ASRC then only absorbs
-//                  the difference between the crystals (ratio ~1).
+//                  mclk_sel picks its family; FIFO + ASRC with a ratio ~1
+//                  only absorbs the difference between the crystals.
 //   Switching: core silent and stopped -> (optional STM32 acknowledge, so
 //   it can mute and later re-initialise the AX5689) -> front end and core
 //   in reset -> mclk_sel -> 20 ms for the oscillators -> release.
@@ -31,6 +34,7 @@ module top #(
     parameter GSH   = 0,                  // DPLL gear length shift (sim only)
     parameter DSD_SDATA_IS_RIGHT = 1,
     parameter USE_DCS = 0,
+    parameter SYNC_IN4 = 1,               // phono ADC runs from our MCLK (AK5572 MCLK from the oscillator mux)
     parameter [6:0] I2C_ADDR = 7'h5A,
     parameter [3:0] ATT_DEFAULT = 4'd0,
     parameter integer SYS_HZ = 50000000,
@@ -288,7 +292,7 @@ module top #(
     reg  [23:0] eq_sh;
     reg  [1:0]  eq_bc;
     reg  [3:0]  eq_nsec_new;
-    core #(.WBITS(WBITS), .GSH(GSH), .COEF_DIR(COEF_DIR)) u_core (
+    core #(.WBITS(WBITS), .GSH(GSH), .SYNC_IN4(SYNC_IN4), .COEF_DIR(COEF_DIR)) u_core (
         .clk(mclk_in), .arst_n(rst_n & core_run),
         .f_empty(f_empty), .f_rd(f_rd), .f_re(f_re),
         .s_empty(s_empty), .s_rd(s_rd), .s_re(s_re),

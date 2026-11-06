@@ -8,7 +8,8 @@
 //     -> PCM headroom -> half-band x2/x4 / /2 /4, or CIC5 + FIR for DSD
 //        (all five FIRs multiplier-free: shift-and-add, rtl/fir_csd.v)
 //     -> 176.4 / 192 kHz intermediate stream
-//     -> synchronous source (Fox on our MCLK): small elastic buffer, no ASRC
+//     -> synchronous source (Fox, and the phono ADC when SYNC_IN4 = 1, both on
+//        our MCLK): small elastic buffer, no ASRC
 //        any other source: ASRC with a nominal ratio of 1 (it only absorbs
 //        the difference between the two crystals)
 //     -> fade -> room-correction EQ -> I2S transmitter
@@ -21,6 +22,7 @@
 module core #(
     parameter WBITS = 18,
     parameter GSH   = 0,
+    parameter SYNC_IN4 = 1,           // phono ADC (input 4) clocked from our MCLK: synchronous path
     parameter COEF_DIR = "coef/"
 ) (
     input  wire        clk,            // MCLK
@@ -39,7 +41,7 @@ module core #(
     input  wire        mute_a,
     input  wire        stop_a,         // input / clock switch: go silent, do not start
     input  wire        mfam44_a,       // 1: MCLK is 45.1584 MHz
-    input  wire        sync_en_a,      // allow the synchronous (no-ASRC) path for input 0
+    input  wire        sync_en_a,      // allow the synchronous (no-ASRC) path for inputs 0 and 4
     input  wire        eq_tgl_a,       // EQ word ready (toggle)
     input  wire [6:0]  eq_widx_a,
     input  wire [31:0] eq_wdat_a,
@@ -398,7 +400,7 @@ module core #(
                         cfg_dop <= rm_dop;
                         seq_seen <= rm_seq;
                         tmo <= 25'd0;
-                        cfg_sync <= sync_en && (sel == 3'd0) && (rm_fam48 != mfam44);
+                        cfg_sync <= sync_en && (sel == 3'd0 || (SYNC_IN4 != 0 && sel == 3'd4)) && (rm_fam48 != mfam44);
                         cst <= C_FILL;
                     end
                 end

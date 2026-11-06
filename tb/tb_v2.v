@@ -71,7 +71,9 @@ module tb_v2;
     assign i2c_sda = sda_m ? 1'bz : 1'b0;
 
     wire obclk, olrck, osdata, audio_on;
-    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20)) dut (
+    // SYNC_IN4 = 0: this bench drives the phono input from its own +17 ppm clock
+    // (old AK5572 master with a crystal) to exercise the ASRC path.
+    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .SYNC_IN4(0)) dut (
         .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(mclk_sel), .fox_fsel(fox_fsel),
         .i2s_bclk_in(fb), .i2s_lrck_in(fl), .i2s_sdata_in(fd), .dsd_on(fox_dsd),
         .spdif_in({3'b000, sp0}),
