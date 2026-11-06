@@ -263,11 +263,7 @@ def run_v2():
     """ax-bridge2 clocks: synchronous Fox (44.1k / 96k / DSD64) without ASRC,
     S/PDIF and phono with the meter-chosen oscillator, clock switching."""
     import shutil
-    cache = os.path.join(B, "dsd_2822400.hex")
-    if not os.path.exists(cache):
-        nb = int(2822400 * 0.2) // 16 * 16
-        bl, br = make_dsd(2822400.0, nb, 997.0, 3001.0)
-        write_dsd_hex(bl, br, cache)
+    cache = dsd_cache_1k()
     shutil.copy(cache, os.path.join(B, "dsd.hex"))
     n = sum(1 for _ in open(cache))
     exe = os.path.join(B, "v2.vvp")
@@ -286,7 +282,7 @@ def run_v2():
         (1, 192000.0, 0.0, 1499.0, 7001.0, -1.0, -120.0, "Fox 96k sync"),
         (2, 176400.0, 60.0, 1499.0, 5003.0, -1.0, -110.0, "S/PDIF 44.1k ASRC"),
         (3, 192000.0, 17.0, 1201.0, 4001.0, -1.0, -110.0, "phono 192k ASRC"),
-        (4, 176400.0, 0.0, 997.0, 3001.0, -6.02, -100.0, "Fox DSD64 sync"),
+        (4, 176400.0, 0.0, 1000.0, 3000.0, -6.02, -100.0, "Fox DSD64 sync"),
     ]
     for seg, fso, ppm, fl, fr, lvl, lim, what in segs:
         try:
@@ -345,15 +341,21 @@ def run_clip():
               f"R {ar:6.2f} dBFS (exp {exp_r:6.2f}) THD+N {tr:6.1f}")
     return ok
 
+def dsd_cache_1k():
+    """DSD64 test file whose 0.2 s loop holds whole periods of both tones
+    (1000 / 3000 Hz), so a capture across the loop point stays clean"""
+    cache = os.path.join(B, "dsd_2822400_1k.hex")
+    if not os.path.exists(cache):
+        nb = int(2822400 * 0.2) // 16 * 16
+        bl, br = make_dsd(2822400.0, nb, 1000.0, 3000.0)
+        write_dsd_hex(bl, br, cache)
+    return cache
+
 def run_hdmi():
     """HDMI input: native DSD with automatic detection / flag / L-R order,
     and a PCM input with auto-detect on that must stay PCM."""
     import shutil
-    cache = os.path.join(B, "dsd_2822400.hex")
-    if not os.path.exists(cache):
-        nb = int(2822400 * 0.2) // 16 * 16
-        bl, br = make_dsd(2822400.0, nb, 997.0, 3001.0)
-        write_dsd_hex(bl, br, cache)
+    cache = dsd_cache_1k()
     shutil.copy(cache, os.path.join(B, "dsd.hex"))
     n = sum(1 for _ in open(cache))
     exe = os.path.join(B, "hdmi.vvp")
@@ -369,9 +371,9 @@ def run_hdmi():
     ok = "PASS tb_hdmi" in r.stdout
     segs = [  # seg, ppm, fl, fr, level, limit, what
         (0, -45.0, 1499.0, 5003.0, -1.0, -110.0, "in2 PCM 96, auto on"),
-        (1, -27.0, 997.0, 3001.0, -6.02, -100.0, "in3 DSD64 auto"),
-        (2, -27.0, 3001.0, 997.0, -6.02, -100.0, "in3 DSD64 L/R swapped"),
-        (3, -27.0, 997.0, 3001.0, -6.02, -100.0, "in3 DSD64 flag"),
+        (1, -27.0, 1000.0, 3000.0, -6.02, -100.0, "in3 DSD64 auto"),
+        (2, -27.0, 3000.0, 1000.0, -6.02, -100.0, "in3 DSD64 L/R swapped"),
+        (3, -27.0, 1000.0, 3000.0, -6.02, -100.0, "in3 DSD64 flag"),
     ]
     for seg, ppm, fl, fr, lvl, lim, what in segs:
         d = np.loadtxt(os.path.join(B, f"hdmi_seg{seg}.txt"), ndmin=2) / 2.0 ** 31

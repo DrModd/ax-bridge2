@@ -179,6 +179,7 @@ module top #(
     wire       c_running = cst_q[6];
     wire       c_run     = cst_q[7];
     wire       c_idle    = cst_q[12] || !core_run;
+    reg        c_sw;                           // core freshly released: its control levels settle
     wire [2:0] cfg_k     = cst_q[2:0];
     wire       cfg_fam48 = cst_q[3];
     wire       cfg_dsd   = cst_q[4];
@@ -273,6 +274,13 @@ module top #(
         end
     end
 
+    // core-ready window: ~10 us after release (reset synchroniser, control levels)
+    reg [9:0] c_sw_n;
+    always @(posedge sys_clk or negedge rst_n)
+        if (!rst_n) begin c_sw <= 1'b1; c_sw_n <= 10'd0; end
+        else if (!core_run) begin c_sw <= 1'b1; c_sw_n <= 10'd0; end
+        else if (c_sw) begin c_sw_n <= c_sw_n + 10'd1; if (&c_sw_n) c_sw <= 1'b0; end
+
     // ---------------- audio core (MCLK) ----------------
     reg         eq_tgl, eq_apl_tgl;
     reg  [6:0]  eq_idx, eq_widx;
@@ -314,7 +322,8 @@ module top #(
     //                  STM32 acknowledge before switching the clock (1); reset 0x0D
     // 0x15 CLK_STAT r  [0] MCLK 45.1584 MHz, [1] switch request waiting for the
     //                  acknowledge, [2] switching / settling, [3] synchronous path
-    //                  active, [4] meter valid, [5] meter: 44.1 family, [7] the
+    //                  active, [4] meter valid, [5] meter: 44.1 family, [6] audio core
+    //                  running (EQ writes are taken only then), [7] the
     //                  clock was switched since the last clear
     //              w   bit 0 = 1: acknowledge (switch now); bit 7 = 1: clear [7]
     // 0x16 METER   r   meter: [2:0] k, [3] 48k family, [4] DSD, [7] valid
@@ -430,7 +439,7 @@ module top #(
             8'h12: i2c_rd = sp_cs0;
             8'h13: i2c_rd = sp_cs3;
             8'h14: i2c_rd = {4'd0, ctl_clk};
-            8'h15: i2c_rd = {clk_sw_seen, 1'b0, ~mt_fam48 & mt_stable, mt_stable, cst_q[13],
+            8'h15: i2c_rd = {clk_sw_seen, core_run & ~c_sw, ~mt_fam48 & mt_stable, mt_stable, cst_q[13],
                              q == Q_SWITCH || q == Q_SETTLE, clk_req, mclk_sel};
             8'h16: i2c_rd = {mt_stable, 2'd0, mt_dsd, mt_fam48, mt_k};
             default: i2c_rd = 8'h00;

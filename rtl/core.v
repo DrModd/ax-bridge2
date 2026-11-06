@@ -87,17 +87,19 @@ module core #(
     // when the toggle is seen (one word per 4 I2C bytes)
     reg [2:0] et, at;
     reg       e_init;
+    reg [1:0] e_cnt;                          // let the synchronisers fill after reset
     reg       eq_we, eq_apply;
     reg [6:0] eq_widx;
     reg [31:0] eq_wdat;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            et <= 3'd0; at <= 3'd0; e_init <= 1'b0; eq_we <= 1'b0; eq_apply <= 1'b0;
+            et <= 3'd0; at <= 3'd0; e_init <= 1'b0; e_cnt <= 2'd0; eq_we <= 1'b0; eq_apply <= 1'b0;
             eq_widx <= 7'd0; eq_wdat <= 32'd0;
         end else begin
             et <= {et[1:0], eq_tgl_a};
             at <= {at[1:0], eq_apl_tgl_a};
-            e_init <= 1'b1;                           // ignore the first comparison after reset
+            // a toggle level present at reset release is not an event
+            if (e_cnt != 2'd3) e_cnt <= e_cnt + 2'd1; else e_init <= 1'b1;
             eq_we <= e_init && (et[2] != et[1]);
             eq_apply <= e_init && (at[2] != at[1]);
             if (et[2] != et[1]) begin eq_widx <= eq_widx_a; eq_wdat <= eq_wdat_a; end

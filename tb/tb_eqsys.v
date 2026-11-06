@@ -165,6 +165,10 @@ module tb_eqsys;
         check(r0, 8'hA5, "ID"); check(r1, 8'h20, "VERSION");
         rd_regs(8'h09, r0, r1, r2, r3);
         check(r0, 8'h00, "EQ_CTRL");
+        // ax-bridge2: EQ writes reach the audio core only while it runs (CLK_STAT[6])
+        r0 = 0;
+        while (!(r0 & 8'h40)) rd_regs(8'h15, r0, r1, r2, r3);
+        $display("%8.2f ms  audio core running", $realtime / 1e6);
         wr_block(NB1);
         rd_regs(8'h0B, r0, r1, r2, r3);
         check(r0, NB1 / 4, "EQ_IDX");
