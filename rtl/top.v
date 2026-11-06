@@ -205,7 +205,12 @@ module top #(
     wire        in_chg = (ctl_sel != sel_cur) || (ctl_sline != sline_cur);
     // family wanted for an input: Fox -> its pin; others -> meter (else keep)
     wire        meas44 = mt_stable ? ~mt_fam48 : mclk_sel;
-    wire        want_now = !ctl_clk[0] ? ctl_clk[1] : (sel_cur == 3'd0 ? fox44 : meas44);
+    // auto = 0 and sync = 0: the all-asynchronous mode - every input through
+    // the full ASRC, one fixed output rate, no oscillator switching. It is
+    // always 49.152 MHz / 192 kHz: the ASRC converts 1:1 and 44.1 -> 48 but
+    // not 48 -> 44.1, so a fixed 45.1584 MHz would reject 48 kHz sources.
+    wire        all_async = !ctl_clk[0] && !ctl_clk[2];
+    wire        want_now = !ctl_clk[0] ? (ctl_clk[1] && !all_async) : (sel_cur == 3'd0 ? fox44 : meas44);
 
     always @(posedge sys_clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -322,8 +327,13 @@ module top #(
     // 0x0F INPUTS  r   [4:0] live inputs, [7:5] current input
     // 0x10..0x13   S/PDIF (as ax-bridge 0x07)
     // 0x14 CLK_CTRL rw [0] auto (1), [1] manual family when auto = 0 (1 = 44.1 kHz,
-    //                  45.1584 MHz), [2] synchronous Fox path (1), [3] wait for the
-    //                  STM32 acknowledge before switching the clock (1); reset 0x0D
+    //                  45.1584 MHz; only with [2] = 1), [2] synchronous path for
+    //                  the Fox and the phono ADC (1), [3] wait for the STM32
+    //                  acknowledge before switching the clock (1); reset 0x0D.
+    //                  Modes: 0x0D two oscillators, sync Fox/ADC, async inputs via
+    //                  FIFO+ASRC 1:1 (default); 0x00 ALL-ASYNC: 49.152 MHz fixed,
+    //                  192 kHz out, every input (Fox and ADC too) through the full
+    //                  ASRC (44.1 -> 48 included), the oscillator never switches.
     // 0x15 CLK_STAT r  [0] MCLK 45.1584 MHz, [1] switch request waiting for the
     //                  acknowledge, [2] switching / settling, [3] synchronous path
     //                  active, [4] meter valid, [5] meter: 44.1 family, [6] audio core
