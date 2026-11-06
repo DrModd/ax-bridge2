@@ -235,7 +235,7 @@ module tb_v2;
         ack_switch(40.0);
         wait_on(60.0);
         rd_regs(8'h15, r0, r1, r2, r3);
-        check(r0 & 8'h7F, 8'h39, "CLK_STAT");     // 45.1584 MHz, synchronous, meter 44.1
+        check(r0 & 8'h7F, 8'h79, "CLK_STAT");     // [6] core running, 45.1584 MHz, synchronous, meter 44.1
         rd_regs(8'h02, r0, r1, r2, r3);
         check(r0, 8'h80, "FORMAT"); check(r1, 8'h01, "RATE"); check(r2, 8'h04, "PLL");
         capture(0, 4096);
@@ -244,7 +244,7 @@ module tb_v2;
         ack_switch(40.0);
         wait_on(60.0);
         rd_regs(8'h15, r0, r1, r2, r3);
-        check(r0 & 8'h7F, 8'h18, "CLK_STAT");     // 49.152 MHz, synchronous, meter 48
+        check(r0 & 8'h7F, 8'h58, "CLK_STAT");     // 49.152 MHz, synchronous, meter 48
         rd_regs(8'h02, r0, r1, r2, r3);
         check(r0, 8'h89, "FORMAT"); check(r1, 8'h04, "RATE");
         capture(1, 4096);
@@ -253,7 +253,7 @@ module tb_v2;
         ack_switch(60.0);
         wait_on(120.0);
         rd_regs(8'h15, r0, r1, r2, r3);
-        check(r0 & 8'h7F, 8'h31, "CLK_STAT");     // 45.1584, meter valid 44.1, not sync
+        check(r0 & 8'h7F, 8'h71, "CLK_STAT");     // 45.1584, meter valid 44.1, not sync
         rd_regs(8'h02, r0, r1, r2, r3);
         check(r0, 8'h80, "FORMAT"); check(r1, 8'h01, "RATE");
         capture(2, 4096);
@@ -262,7 +262,7 @@ module tb_v2;
         ack_switch(60.0);
         wait_on(120.0);
         rd_regs(8'h15, r0, r1, r2, r3);
-        check(r0 & 8'h7F, 8'h10, "CLK_STAT");     // 49.152, meter valid 48k family
+        check(r0 & 8'h7F, 8'h50, "CLK_STAT");     // 49.152, meter valid 48k family
         rd_regs(8'h02, r0, r1, r2, r3);
         check(r0, 8'h8A, "FORMAT"); check(r1, 8'h06, "RATE");
         capture(3, 4096);
@@ -272,7 +272,7 @@ module tb_v2;
         wr_reg(8'h00, 8'h00);
         wait_on(150.0);
         rd_regs(8'h15, r0, r1, r2, r3);
-        check(r0 & 8'h7F, 8'h39, "CLK_STAT");
+        check(r0 & 8'h7F, 8'h79, "CLK_STAT");
         rd_regs(8'h02, r0, r1, r2, r3);
         check(r0, 8'h92, "FORMAT"); check(r1, 8'h11, "RATE");
         capture(4, 4096);

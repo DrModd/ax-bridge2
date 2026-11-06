@@ -342,11 +342,12 @@ def run_clip():
     return ok
 
 def dsd_cache_1k():
-    """DSD64 test file whose 0.2 s loop holds whole periods of both tones
-    (1000 / 3000 Hz), so a capture across the loop point stays clean"""
-    cache = os.path.join(B, "dsd_2822400_1k.hex")
+    """DSD64 test file (1000 / 3000 Hz) of 0.5 s: longer than any bench that
+    uses it, so no capture crosses the loop point (the modulator state jumps
+    there, a small transient in the output)"""
+    cache = os.path.join(B, "dsd_2822400_1k5.hex")
     if not os.path.exists(cache):
-        nb = int(2822400 * 0.2) // 16 * 16
+        nb = int(2822400 * 0.5) // 16 * 16
         bl, br = make_dsd(2822400.0, nb, 1000.0, 3000.0)
         write_dsd_hex(bl, br, cache)
     return cache
