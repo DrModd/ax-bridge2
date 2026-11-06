@@ -1,9 +1,10 @@
 // ax-bridge2 - Tang Primer 25K (GW5A-LV25MG121NC1/I0) pins.
 // Core-board connector pins (J1-n / J2-n) per the Sipeed Tang Primer 25K specification.
-// Freed compared with ax-bridge: E10 (J1-54), F5 (J1-20), H11 (J1-37, GCLKT_16 - spare clock input).
-// Dock: H11 and H10 are wired to buttons S1 / S2 (sipeed/TangPrimer-25K-example issue #11).
-// H10 carries spdif_in[3] (ARC): on the Dock that line sees the S2 button network - do not press S2,
-// and test ARC last; on our own board (module only) H10 is a plain pin.
+// Freed compared with ax-bridge: E10 (J1-54), H10, H11 (J1-37, GCLKT_16; on the Dock both are buttons).
+// Dock (schematic Tang_25K_60033): H11 / H10 go only to buttons S1 / S2 (100R to 3V3, TVS and
+// 100 nF to GND), not to any header - unusable for signals. spdif_in[3] moved from H10 to F5.
+// Every other pin here is on a Dock header: PMOD J4/J5/J6 or the 2x20 header J3 (K2, K9, L9,
+// J8, F7, J10, J11, L10). E2 is the module's own 50 MHz oscillator.
 
 // ---- Clocks: every clock on a GCLKT (true global clock) pin ----
 // 50 MHz oscillator on the Tang Primer 25K module (GCLKT_10B) - service domain
@@ -54,7 +55,7 @@ IO_LOC "spdif_in[2]" B10;
 IO_PORT "spdif_in[2]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
 
 // HDMI ARC, J1-39
-IO_LOC "spdif_in[3]" H10;   // Dock: button S2
+IO_LOC "spdif_in[3]" F5;    // J1-20, Dock PMOD J6-11 (was H10 = Dock button S2)
 IO_PORT "spdif_in[3]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
 
 // ---- Input 2: Bluetooth I2S ----
