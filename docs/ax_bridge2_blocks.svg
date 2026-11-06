@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1140" viewBox="0 0 1700 1140">
+<defs>
+<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#222"/></marker>
+<marker id="arb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2e7d32"/></marker>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b00020"/></marker>
+</defs>
+<style>
+text{font-family:"DejaVu Sans",Arial,sans-serif;font-size:13px;fill:#111}
+.h{font-size:21px;font-weight:bold}.g{fill:#555}.t{font-weight:bold;font-size:14px}
+.m{fill:#1a5fb4;font-size:12px;font-family:"DejaVu Sans Mono",monospace}.v{fill:#333;font-size:12px}
+.lab{font-size:12px;fill:#333}.lb{font-size:12px;fill:#1a5fb4}.lg{font-size:12px;fill:#2e7d32}.lr{font-size:12px;fill:#b00020}
+.mc{fill:#eef4fb;stroke:#2b5797;stroke-width:2}.bc{fill:#fff1e0;stroke:#c66a00;stroke-width:2}
+.sc{fill:#eef8ee;stroke:#2e7d32;stroke-width:2}.ex{fill:#f3f3f3;stroke:#555;stroke-width:2}
+.new{fill:#fff7d6;stroke:#b8860b;stroke-width:2}
+.w{fill:none;stroke:#222;stroke-width:2}.wg{fill:none;stroke:#2e7d32;stroke-width:1.6;stroke-dasharray:6 4}
+.wr{fill:none;stroke:#b00020;stroke-width:2.4}
+.d{fill:#222}.zone{fill:none;stroke-width:2;stroke-dasharray:10 6}
+</style>
+<rect width="1700" height="1140" fill="#fff"/>
+<text x="20" y="34" class="h" text-anchor="start">ax-bridge2 — блок-схема: два генератора, синхронный Фокс, обслуживание на 50 МГц</text>
+<text x="20" y="56" class="g" text-anchor="start">Три тактовых домена: BCLK входа (оранжевый), 50 МГц — обслуживание (зелёный), MCLK 45,1584 / 49,152 МГц — звук (синий). Красное — MCLK на плате.</text>
+<rect x="20" y="90" width="200" height="120" rx="8" class="ex"/>
+<text x="120.0" y="112" class="t" text-anchor="middle">генераторы</text>
+<text x="120.0" y="128" class="m" text-anchor="middle">на плате D2</text>
+<text x="120.0" y="146" class="v" text-anchor="middle">45,1584 МГц (сетка 44,1)</text>
+<text x="120.0" y="162" class="v" text-anchor="middle">49,152 МГц (сетка 48)</text>
+<text x="120.0" y="178" class="v" text-anchor="middle">OE / мультиплексор</text>
+<text x="232" y="130" class="lr" text-anchor="start">MCLK</text>
+<polyline points="220,150 300,150 300,112 1660,112" class="wr"/>
+<circle cx="300" cy="150" r="4" class="d"/>
+<polyline points="300,150 300,205 180,205 180,262" class="wr" marker-end="url(#arr)"/>
+<circle cx="760" cy="112" r="4" class="d"/>
+<polyline points="760,112 760,138" class="wr" marker-end="url(#arr)"/>
+<text x="768" y="130" class="lr" text-anchor="start">MCLK → C11 (GCLKT)</text>
+<rect x="20" y="262" width="200" height="66" rx="8" class="ex"/>
+<text x="120.0" y="284" class="t" text-anchor="middle">0  Luckfox (Фокс)</text>
+<text x="120.0" y="302" class="v" text-anchor="middle">PCM / DoP / DSD, клок от</text>
+<text x="120.0" y="318" class="v" text-anchor="middle">нашего MCLK — синхронно</text>
+<rect x="20" y="342" width="200" height="52" rx="8" class="ex"/>
+<text x="120.0" y="364" class="t" text-anchor="middle">2  Bluetooth</text>
+<text x="120.0" y="382" class="v" text-anchor="middle">I2S PCM</text>
+<rect x="20" y="408" width="200" height="52" rx="8" class="ex"/>
+<text x="120.0" y="430" class="t" text-anchor="middle">3  HDMI I2S</text>
+<text x="120.0" y="448" class="v" text-anchor="middle">PCM / DoP / DSD</text>
+<rect x="20" y="474" width="200" height="52" rx="8" class="ex"/>
+<text x="120.0" y="496" class="t" text-anchor="middle">4  фонокорректор</text>
+<text x="120.0" y="514" class="v" text-anchor="middle">AK5572, I2S 192 кГц</text>
+<rect x="20" y="560" width="200" height="84" rx="8" class="ex"/>
+<text x="120.0" y="582" class="t" text-anchor="middle">1  S/PDIF × 4</text>
+<text x="120.0" y="598" class="m" text-anchor="middle">логический уровень</text>
+<text x="120.0" y="616" class="v" text-anchor="middle">коакс, оптика,</text>
+<text x="120.0" y="632" class="v" text-anchor="middle">AES/EBU, HDMI ARC</text>
+<text x="20" y="666" class="lab" text-anchor="start">BCLK — на GCLKT</text>
+<rect x="250" y="240" width="270" height="310" rx="10" class="zone" stroke="#c66a00"/>
+<text x="262" y="258" class="lab" text-anchor="start">домен BCLK входа</text>
+<polyline points="220,295 270,295" class="w" marker-end="url(#ar)"/>
+<polyline points="220,368 270,368" class="w" marker-end="url(#ar)"/>
+<polyline points="220,434 270,434" class="w" marker-end="url(#ar)"/>
+<polyline points="220,500 270,500" class="w" marker-end="url(#ar)"/>
+<rect x="270" y="280" width="100" height="240" rx="8" class="bc"/>
+<text x="320.0" y="302" class="t" text-anchor="middle">in_mux</text>
+<text x="320.0" y="320" class="v" text-anchor="middle">DCS / LUT</text>
+<text x="320.0" y="336" class="v" text-anchor="middle">4 BCLK</text>
+<text x="320.0" y="352" class="v" text-anchor="middle"></text>
+<text x="320.0" y="368" class="v" text-anchor="middle">флаги DSD</text>
+<text x="320.0" y="384" class="v" text-anchor="middle">(Фокс, HDMI)</text>
+<polyline points="370,400 395,400" class="w" marker-end="url(#ar)"/>
+<rect x="395" y="350" width="110" height="100" rx="8" class="bc"/>
+<text x="450.0" y="372" class="t" text-anchor="middle">bclk_rx</text>
+<text x="450.0" y="390" class="v" text-anchor="middle">I2S / DSD</text>
+<text x="450.0" y="406" class="v" text-anchor="middle">приём</text>
+<polyline points="505,400 545,400" class="w" marker-end="url(#ar)"/>
+<rect x="545" y="360" width="120" height="80" rx="8" class="mc"/>
+<text x="605.0" y="382" class="t" text-anchor="middle">afifo</text>
+<text x="605.0" y="400" class="v" text-anchor="middle">BCLK → MCLK</text>
+<rect x="250" y="560" width="680" height="560" rx="10" class="zone" stroke="#2e7d32"/>
+<text x="262" y="578" class="lg" text-anchor="start">домен 50 МГц — обслуживание (не останавливается при смене генератора)</text>
+<rect x="20" y="690" width="200" height="70" rx="8" class="ex"/>
+<text x="120.0" y="712" class="t" text-anchor="middle">генератор 50 МГц</text>
+<text x="120.0" y="730" class="v" text-anchor="middle">на модуле, E2 (GCLKT)</text>
+<polyline points="220,725 270,725" class="wg" marker-end="url(#arb)"/>
+<polyline points="220,602 270,602" class="w" marker-end="url(#ar)"/>
+<rect x="270" y="590" width="150" height="70" rx="8" class="sc"/>
+<text x="345.0" y="612" class="t" text-anchor="middle">spdif_rx</text>
+<text x="345.0" y="630" class="v" text-anchor="middle">98 Мвыб/с, сетка</text>
+<text x="345.0" y="646" class="v" text-anchor="middle">по длине кадра</text>
+<polyline points="420,625 545,625" class="w" marker-end="url(#ar)"/>
+<rect x="545" y="590" width="120" height="70" rx="8" class="mc"/>
+<text x="605.0" y="612" class="t" text-anchor="middle">afifo</text>
+<text x="605.0" y="630" class="v" text-anchor="middle">50 МГц → MCLK</text>
+<polyline points="665,625 720,625 720,470 790,470" class="w" marker-end="url(#ar)"/>
+<polyline points="665,400 720,400 720,470" class="w"/>
+<circle cx="720" cy="470" r="4" class="d"/>
+<rect x="270" y="690" width="190" height="120" rx="8" class="sc"/>
+<text x="365.0" y="712" class="t" text-anchor="middle">частотомер</text>
+<text x="365.0" y="730" class="v" text-anchor="middle">отсчёты входа за 5,2 мс</text>
+<text x="365.0" y="746" class="v" text-anchor="middle">→ частота и сетка</text>
+<text x="365.0" y="762" class="v" text-anchor="middle">44,1 / 48 кГц</text>
+<polyline points="450,450 450,545 330,545 330,690" class="wg" marker-end="url(#arb)"/>
+<text x="338" y="560" class="lg" text-anchor="start"></text>
+<polyline points="345,660 345,690" class="wg" marker-end="url(#arb)"/>
+<rect x="500" y="700" width="410" height="190" rx="8" class="new"/>
+<text x="705.0" y="722" class="t" text-anchor="middle">менеджер клоков и входов</text>
+<text x="705.0" y="740" class="v" text-anchor="middle">вход 0 (Фокс): mclk_sel = MCLK_SEL Фокса</text>
+<text x="705.0" y="756" class="v" text-anchor="middle">другие входы: mclk_sel — по частотомеру</text>
+<text x="705.0" y="772" class="v" text-anchor="middle">смена: стоп → флаг STM32 → подтверждение</text>
+<text x="705.0" y="788" class="v" text-anchor="middle">(или 300 мс) → сброс тракта → mclk_sel</text>
+<text x="705.0" y="804" class="v" text-anchor="middle">→ 20 мс на генератор → снова захват</text>
+<text x="705.0" y="820" class="v" text-anchor="middle">переключение входов и линий S/PDIF,</text>
+<text x="705.0" y="836" class="v" text-anchor="middle">задержки и сторожа</text>
+<polyline points="460,760 500,760" class="wg" marker-end="url(#arb)"/>
+<polyline points="120,328 120,336 232,336 232,860 500,860" class="wg" marker-end="url(#arb)"/>
+<text x="270" y="852" class="lg" text-anchor="start">MCLK_SEL Фокса</text>
+<polyline points="560,700 560,682 242,682 242,228 120,228 120,212" class="wg" marker-end="url(#arb)"/>
+<text x="128" y="224" class="lg" text-anchor="start">mclk_sel</text>
+<rect x="270" y="930" width="250" height="150" rx="8" class="sc"/>
+<text x="395.0" y="952" class="t" text-anchor="middle">I2C 0x5A, регистры</text>
+<text x="395.0" y="970" class="v" text-anchor="middle">вход, MUTE, ATT, DSD, EQ,</text>
+<text x="395.0" y="986" class="v" text-anchor="middle">S/PDIF 0x10–0x13,</text>
+<text x="395.0" y="1002" class="v" text-anchor="middle">клоки 0x14–0x16, VERSION 0x20</text>
+<rect x="20" y="960" width="200" height="60" rx="6" class="ex"/>
+<text x="120" y="986" class="t" text-anchor="middle">STM32H523</text>
+<text x="120" y="1004" class="v" text-anchor="middle">I2C3</text>
+<polyline points="220,990 270,990" class="w"/>
+<polyline points="520,1000 700,1000 700,890" class="wg" marker-end="url(#arb)"/>
+<text x="540" y="1020" class="lg" text-anchor="start">управление тракту — уровни через синхронизаторы</text>
+<polyline points="520,1040 950,1040 950,692" class="wg" marker-end="url(#arb)"/>
+<rect x="760" y="140" width="920" height="550" rx="10" class="zone" stroke="#2b5797"/>
+<text x="772" y="160" class="lb" text-anchor="start">домен MCLK — звуковой тракт (core.v), сбрасывается на время смены генератора</text>
+<rect x="790" y="430" width="120" height="80" rx="8" class="mc"/>
+<text x="850.0" y="452" class="t" text-anchor="middle">приём</text>
+<text x="850.0" y="470" class="v" text-anchor="middle">отсчётов,</text>
+<text x="850.0" y="486" class="v" text-anchor="middle">ATT 0…6 дБ</text>
+<polyline points="910,470 945,470" class="w" marker-end="url(#ar)"/>
+<polyline points="945,200 945,510" class="w"/>
+<circle cx="945" cy="470" r="4" class="d"/>
+<text x="951" y="194" class="lb" text-anchor="start">PCM ×4</text>
+<polyline points="945,200 1015,200" class="w" marker-end="url(#ar)"/>
+<rect x="1015" y="184" width="80" height="32" rx="6" class="new"/>
+<text x="1055" y="205" class="v" text-anchor="middle">hb_a ×2</text>
+<polyline points="1095,200 1105,200" class="w" marker-end="url(#ar)"/>
+<rect x="1105" y="184" width="80" height="32" rx="6" class="new"/>
+<text x="1145" y="205" class="v" text-anchor="middle">hb_b ×2</text>
+<polyline points="1185,200 1265,200" class="w" marker-end="url(#ar)"/>
+<text x="951" y="254" class="lb" text-anchor="start">PCM ×2</text>
+<polyline points="945,260 1015,260" class="w" marker-end="url(#ar)"/>
+<rect x="1015" y="244" width="80" height="32" rx="6" class="new"/>
+<text x="1055" y="265" class="v" text-anchor="middle">hb_b ×2</text>
+<polyline points="1095,260 1265,260" class="w" marker-end="url(#ar)"/>
+<text x="951" y="314" class="lb" text-anchor="start">PCM ×1</text>
+<polyline points="945,320 1015,320" class="w" marker-end="url(#ar)"/>
+<polyline points="1015,320 1265,320" class="w" marker-end="url(#ar)"/>
+<text x="951" y="374" class="lb" text-anchor="start">PCM ÷2</text>
+<polyline points="945,380 1015,380" class="w" marker-end="url(#ar)"/>
+<rect x="1015" y="364" width="80" height="32" rx="6" class="new"/>
+<text x="1055" y="385" class="v" text-anchor="middle">hd_b ÷2</text>
+<polyline points="1095,380 1265,380" class="w" marker-end="url(#ar)"/>
+<text x="951" y="434" class="lb" text-anchor="start">PCM ÷4</text>
+<polyline points="945,440 1015,440" class="w" marker-end="url(#ar)"/>
+<rect x="1015" y="424" width="80" height="32" rx="6" class="new"/>
+<text x="1055" y="445" class="v" text-anchor="middle">hd_a ÷2</text>
+<polyline points="1095,440 1105,440" class="w" marker-end="url(#ar)"/>
+<rect x="1105" y="424" width="80" height="32" rx="6" class="new"/>
+<text x="1145" y="445" class="v" text-anchor="middle">hd_b ÷2</text>
+<polyline points="1185,440 1265,440" class="w" marker-end="url(#ar)"/>
+<text x="951" y="504" class="lb" text-anchor="start">DSD/DoP</text>
+<polyline points="945,510 1015,510" class="w" marker-end="url(#ar)"/>
+<rect x="1015" y="494" width="80" height="32" rx="6" class="new"/>
+<text x="1055" y="515" class="v" text-anchor="middle">CIC5</text>
+<polyline points="1095,510 1105,510" class="w" marker-end="url(#ar)"/>
+<rect x="1105" y="494" width="80" height="32" rx="6" class="new"/>
+<text x="1145" y="515" class="v" text-anchor="middle">dsd ÷2</text>
+<polyline points="1185,510 1265,510" class="w" marker-end="url(#ar)"/>
+<polyline points="1265,200 1265,510" class="w"/>
+<text x="951" y="545" class="lab" text-anchor="start">жёлтые — КИХ на сдвигах и сложениях (CSD), без умножителей, бит в бит</text>
+<text x="951" y="562" class="lab" text-anchor="start">с прежними; DSD-фильтр — две дорожки параллельно</text>
+<circle cx="1265" cy="355" r="4" class="d"/>
+<text x="1261" y="590" class="lab" text-anchor="start"></text>
+<polyline points="1265,355 1300,355" class="w"/>
+<circle cx="1300" cy="355" r="4" class="d"/>
+<polyline points="1300,355 1300,260 1330,260" class="w" marker-end="url(#ar)"/>
+<polyline points="1300,355 1300,450 1330,450" class="w" marker-end="url(#ar)"/>
+<rect x="1330" y="210" width="170" height="100" rx="8" class="new"/>
+<text x="1415.0" y="232" class="t" text-anchor="middle">буфер 16 отсч.</text>
+<text x="1415.0" y="250" class="v" text-anchor="middle">Фокс синхронно:</text>
+<text x="1415.0" y="266" class="v" text-anchor="middle">без ASRC</text>
+<rect x="1330" y="400" width="170" height="100" rx="8" class="mc"/>
+<text x="1415.0" y="422" class="t" text-anchor="middle">ASRC</text>
+<text x="1415.0" y="440" class="v" text-anchor="middle">остальные входы:</text>
+<text x="1415.0" y="456" class="v" text-anchor="middle">отношение ≈1</text>
+<text x="1338" y="340" class="lab" text-anchor="start">176,4 / 192 кГц</text>
+<polyline points="1500,260 1530,260 1530,355" class="w"/>
+<polyline points="1500,450 1530,450 1530,355" class="w"/>
+<circle cx="1530" cy="355" r="4" class="d"/>
+<polyline points="1530,355 1550,355 1550,380 1555,380" class="w"/>
+<rect x="1555" y="340" width="110" height="80" rx="8" class="mc"/>
+<text x="1610.0" y="362" class="t" text-anchor="middle">fade</text>
+<text x="1610.0" y="380" class="v" text-anchor="middle">плавный</text>
+<text x="1610.0" y="396" class="v" text-anchor="middle">старт/стоп</text>
+<polyline points="1610,420 1610,460" class="w" marker-end="url(#ar)"/>
+<rect x="1555" y="460" width="110" height="90" rx="8" class="mc"/>
+<text x="1610.0" y="482" class="t" text-anchor="middle">EQ</text>
+<text x="1610.0" y="500" class="v" text-anchor="middle">10 биквадов</text>
+<text x="1610.0" y="516" class="v" text-anchor="middle">на канал</text>
+<polyline points="1610,550 1610,590" class="w" marker-end="url(#ar)"/>
+<rect x="1555" y="590" width="110" height="90" rx="8" class="mc"/>
+<text x="1610.0" y="612" class="t" text-anchor="middle">I2S TX</text>
+<text x="1610.0" y="630" class="v" text-anchor="middle">MCLK/256:</text>
+<text x="1610.0" y="646" class="v" text-anchor="middle">176,4 / 192</text>
+<polyline points="1600,680 1600,790" class="w" marker-end="url(#ar)"/>
+<rect x="1500" y="790" width="190" height="80" rx="6" class="ex"/>
+<text x="1595" y="820" class="t" text-anchor="middle">AX5689</text>
+<text x="1595" y="840" class="v" text-anchor="middle">MCLK — тот же генератор</text>
+<text x="1595" y="856" class="v" text-anchor="middle">STM32: переинициализация</text>
+<polyline points="1660,112 1660,790" class="wr" marker-end="url(#arr)"/>
+<text x="1595" y="890" class="lab" text-anchor="middle">I2S 32 бит, 176,4 / 192 кГц</text>
+<text x="1000" y="820" class="t" text-anchor="start">Обозначения</text>
+<rect x="1000" y="834" width="26" height="18" rx="4" class="bc"/>
+<text x="1034" y="848" class="v" text-anchor="start">домен BCLK входа</text>
+<rect x="1000" y="860" width="26" height="18" rx="4" class="sc"/>
+<text x="1034" y="874" class="v" text-anchor="start">домен 50 МГц</text>
+<rect x="1000" y="886" width="26" height="18" rx="4" class="mc"/>
+<text x="1034" y="900" class="v" text-anchor="start">домен MCLK</text>
+<rect x="1000" y="912" width="26" height="18" rx="4" class="new"/>
+<text x="1034" y="926" class="v" text-anchor="start">новое в ax-bridge2</text>
+<rect x="1000" y="938" width="26" height="18" rx="4" class="ex"/>
+<text x="1034" y="952" class="v" text-anchor="start">вне FPGA</text>
+<line x1="1250" y1="844" x2="1290" y2="844" class="wr"/>
+<text x="1298" y="848" class="v" text-anchor="start">MCLK на плате</text>
+<line x1="1250" y1="870" x2="1290" y2="870" class="wg"/>
+<text x="1298" y="874" class="v" text-anchor="start">управление</text>
+</svg>
