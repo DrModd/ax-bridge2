@@ -1,0 +1,457 @@
+#!/usr/bin/env python3
+"""System benches: every input format through top.v, output decoded from
+the I2S pins, then frequency / level / THD+N checked in Python.
+
+usage: run_sys.py [case-name ...]     (no args = all cases)
+"""
+import os
+import subprocess
+import sys
+import time
+import numpy as np
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+B = os.path.join(ROOT, "build")
+os.makedirs(B, exist_ok=True)
+RTL = sorted(os.path.join(ROOT, "rtl", f) for f in os.listdir(os.path.join(ROOT, "rtl"))
+             if f.endswith(".v"))
+FOUT = 192000.0
+
+# ---------------------------------------------------------------- DSD source
+def ntf_coeffs(order=5, hinf=1.5):
+    """Highpass NTF (1-z^-1)^order / A(z) with max gain ~hinf, leading 1."""
+    from scipy import signal
+    lo, hi = 0.01, 0.45
+    for _ in range(60):
+        wc = (lo + hi) / 2
+        b, a = signal.butter(order, wc, "high")
+        b = b / b[0]
+        w, H = signal.freqz(b, a, 4096)
+        if np.abs(H).max() > hinf:
+            hi = wc
+        else:
+            lo = wc
+    b, a = signal.butter(order, lo, "high")
+    return b / b[0], a
+
+def make_dsd(fbit, nbits, fl, fr, amp=0.5):
+    """5th-order 1-bit sigma-delta (error-feedback NTF), both channels."""
+    b, a = ntf_coeffs()
+    f = b - a                       # NTF - 1 = (B-A)/A, f[0] == 0
+    t = np.arange(nbits) / fbit
+    out = []
+    for f0 in (fl, fr):
+        u = amp * np.sin(2 * np.pi * f0 * t)
+        e_hist = np.zeros(len(a))
+        w_hist = np.zeros(len(a))
+        y = np.empty(nbits, dtype=np.uint8)
+        order = len(a) - 1
+        fb = f[1:]
+        aa = a[1:]
+        eh = [0.0] * order
+        wh = [0.0] * order
+        for n in range(nbits):
+            # w[n] = sum f[k] e[n-k] - sum a[k] w[n-k]
+            wn = 0.0
+            for k in range(order):
+                wn += fb[k] * eh[k] - aa[k] * wh[k]
+            v = u[n] + wn
+            yb = 1.0 if v >= 0 else -1.0
+            en = yb - v
+            eh = [en] + eh[:-1]
+            wh = [wn] + wh[:-1]
+            y[n] = 1 if yb > 0 else 0
+        out.append(y)
+    return out
+
+def write_dsd_hex(bl, br, path):
+    n = len(bl) // 16
+    with open(path, "w") as f:
+        for i in range(n):
+            wl = int("".join(map(str, bl[i * 16:(i + 1) * 16])), 2)
+            wr = int("".join(map(str, br[i * 16:(i + 1) * 16])), 2)
+            f.write("%04x%04x\n" % (wl, wr))
+    return n
+
+# ---------------------------------------------------------------- analysis
+def analyse(y, f_exp, fs=FOUT):
+    n = len(y)
+    w = np.kaiser(n, 38.0)
+    Y = np.abs(np.fft.rfft(y * w)) ** 2
+    f = np.fft.rfftfreq(n, 1 / fs)
+    k = int(np.argmax(Y[1:])) + 1
+    # parabolic interpolation on log magnitude
+    lm = np.log(Y[k - 1:k + 2] + 1e-300)
+    d = 0.5 * (lm[0] - lm[2]) / (lm[0] - 2 * lm[1] + lm[2])
+    fpk = (k + d) * fs / n
+    win = 30
+    sig = Y[max(k - win, 1):k + win + 1].sum()
+    band = (f > 20) & (f < 20000)
+    band[max(k - win, 1):k + win + 1] = False
+    noise = Y[band].sum()
+    amp = np.sqrt(4 * sig / (n * (w ** 2).sum()))     # sine peak amplitude
+    return fpk, 20 * np.log10(amp + 1e-30), 10 * np.log10(noise / sig)
+
+CASES = {
+    #  name        mode  rate        ppm     fl      fr     amp(dBFS expected)
+    "pcm44":   (0, 44100.0,    37.0,  997.0, 3001.0, -1.0),
+    "pcm48":   (0, 48000.0,   -23.0,  997.0, 3001.0, -1.0),
+    "pcm88":   (0, 88200.0,    11.0, 1499.0, 15013.0, -1.0),
+    "pcm96":   (0, 96000.0,    52.0,  997.0, 7003.0, -1.0),
+    "pcm176":  (0, 176400.0,  -41.0,  997.0, 3001.0, -1.0),
+    "pcm192":  (0, 192000.0,   13.0, 1999.0, 17011.0, -1.0),
+    "pcm352":  (0, 352800.0,   29.0,  997.0, 3001.0, -1.0),
+    "pcm384":  (0, 384000.0,  -17.0,  997.0, 3001.0, -1.0),
+    "pcm705":  (0, 705600.0,    7.0,  997.0, 3001.0, -1.0),
+    "pcm768":  (0, 768000.0,   -9.0,  997.0, 11003.0, -1.0),
+    "dsd64":   (1, 2822400.0,  31.0,  997.0, 3001.0, -6.02),
+    "dsd128":  (1, 5644800.0, -27.0,  997.0, 3001.0, -6.02),
+    "dsd256":  (1, 11289600.0, 19.0,  997.0, 3001.0, -6.02),
+    "dsd512":  (1, 22579200.0, -8.0,  997.0, 3001.0, -6.02),
+    "dop64":   (2, 176400.0,   21.0,  997.0, 3001.0, -6.02),
+    "dop128":  (2, 352800.0,  -33.0,  997.0, 3001.0, -6.02),
+    "dop256":  (2, 705600.0,   15.0,  997.0, 3001.0, -6.02),
+}
+
+def run_case(name, nout=8192, thdn_limit=-110.0, extra=()):
+    mode, rate, ppm, fl, fr, lvl = CASES[name]
+    params = [f"-Ptb_sys.MODE={mode}", f"-Ptb_sys.FS={rate}", f"-Ptb_sys.PPM={ppm}",
+              f"-Ptb_sys.FL={fl}", f"-Ptb_sys.FR={fr}", f"-Ptb_sys.NOUT={nout}"] + list(extra)
+    if mode != 0:
+        fbit = rate if mode == 1 else rate * 16
+        secs = 0.20
+        nb = int(fbit * secs) // 16 * 16
+        hexp = os.path.join(B, "dsd.hex")
+        cache = os.path.join(B, f"dsd_{int(fbit)}.hex")
+        if not os.path.exists(cache):
+            t0 = time.time()
+            bl, br = make_dsd(fbit, nb, fl, fr)
+            write_dsd_hex(bl, br, cache)
+            print(f"  generated DSD {fbit/1e6:.4f} MHz in {time.time()-t0:.0f}s")
+        n = sum(1 for _ in open(cache))
+        import shutil
+        shutil.copy(cache, hexp)
+        params.append(f"-Ptb_sys.DSDN={n}")
+    exe = os.path.join(B, "sys.vvp")
+    r = subprocess.run(["iverilog", "-g2005", "-o", exe, "-s", "tb_sys"] + params +
+                       [os.path.join(ROOT, "tb", "tb_sys.v")] + RTL,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode:
+        print(r.stdout, r.stderr)
+        return False
+    t0 = time.time()
+    r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+    dt = time.time() - t0
+    log = r.stdout
+    data = np.loadtxt(os.path.join(B, "sys_out.txt"), ndmin=2)
+    if len(data) < nout:
+        print(log)
+        print(f"FAIL {name}: only {len(data)} samples captured ({dt:.0f}s)")
+        return False
+    y = data[-nout:] / 2.0 ** 31
+    ok = True
+    res = []
+    for ch, f0 in ((0, fl), (1, fr)):
+        fexp = f0 * (1 + ppm * 1e-6)
+        fpk, amp, thdn = analyse(y[:, ch], fexp)
+        cok = abs(fpk - fexp) < 0.5 and abs(amp - lvl) < 0.1 and thdn < thdn_limit
+        ok &= cok
+        res.append(f"{'LR'[ch]}: f {fpk:9.3f} (exp {fexp:9.3f}) lvl {amp:6.2f} dBFS "
+                   f"THD+N {thdn:7.1f} dB")
+    on = [l for l in log.splitlines() if "audio_on" in l or "audio_off" in l]
+    print(f"{'PASS' if ok else 'FAIL'} {name:7s} | " + " | ".join(res) +
+          f" | {on[0] if on else 'never on'}; {len([l for l in on if 'off' in l])} drop(s), {dt:.0f}s")
+    if any("audio_off" in l for l in on):
+        ok = False
+    return ok
+
+def run_switch():
+    import shutil
+    cache = os.path.join(B, "dsd_2822400.hex")
+    if not os.path.exists(cache):
+        nb = int(2822400 * 0.2) // 16 * 16
+        bl, br = make_dsd(2822400.0, nb, 997.0, 3001.0)
+        write_dsd_hex(bl, br, cache)
+    shutil.copy(cache, os.path.join(B, "dsd.hex"))
+    n = sum(1 for _ in open(cache))
+    exe = os.path.join(B, "switch.vvp")
+    r = subprocess.run(["iverilog", "-g2005", "-o", exe, "-s", "tb_switch",
+                        f"-Ptb_switch.DSDN={n}", os.path.join(ROOT, "tb", "tb_switch.v")] + RTL,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode:
+        print(r.stdout, r.stderr)
+        return False
+    r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+    print(r.stdout)
+    return "PASS tb_switch" in r.stdout
+
+def run_mux():
+    import shutil
+    cache = os.path.join(B, "dsd_2822400.hex")
+    if not os.path.exists(cache):
+        nb = int(2822400 * 0.2) // 16 * 16
+        bl, br = make_dsd(2822400.0, nb, 997.0, 3001.0)
+        write_dsd_hex(bl, br, cache)
+    shutil.copy(cache, os.path.join(B, "dsd.hex"))
+    n = sum(1 for _ in open(cache))
+    exe = os.path.join(B, "mux.vvp")
+    r = subprocess.run(["iverilog", "-g2005", "-o", exe, "-s", "tb_mux",
+                        f"-Ptb_mux.DSDN={n}", os.path.join(ROOT, "tb", "tb_mux.v"),
+                        os.path.join(ROOT, "tb", "tb_src.v"), os.path.join(ROOT, "tb", "tb_spdif_src.v")] + RTL,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode:
+        print(r.stdout, r.stderr)
+        return False
+    r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+    print(r.stdout)
+    ok = "PASS tb_mux" in r.stdout
+    segs = [  # seg, ppm, fl, fr, level, limit
+        (0, 31.0, 997.0, 3001.0, -6.02, -100.0),
+        (1, 60.0, 1499.0, 5003.0, -1.0, -110.0),
+        (2, -45.0, 2003.0, 7001.0, -1.0, -110.0),
+        (3, 60.0, 1499.0, 5003.0, -1.0, -110.0),
+        (4, 17.0, 1201.0, 4001.0, -1.0, -110.0),
+    ]
+    for seg, ppm, fl, fr, lvl, lim in segs:
+        d = np.loadtxt(os.path.join(B, f"mux_seg{seg}.txt"), ndmin=2) / 2.0 ** 31
+        d = d[1200:]          # skip the 1024-frame fade-in
+        res = []
+        for ch, f0 in ((0, fl), (1, fr)):
+            fexp = f0 * (1 + ppm * 1e-6)
+            fpk, amp, thdn = analyse(d[:, ch], fexp)
+            c = abs(fpk - fexp) < 1.0 and abs(amp - lvl) < 0.1 and thdn < lim
+            ok &= c
+            res.append(f"{'LR'[ch]} f {fpk:9.3f} (exp {fexp:9.3f}) {amp:6.2f} dBFS THD+N {thdn:6.1f}")
+        print(f"{'PASS' if ok else 'FAIL'} mux seg{seg}: " + " | ".join(res))
+    return ok
+
+def run_spdif():
+    """S/PDIF receiver: four lines (192k jitter + duty distortion, 96k
+    optical-like distortion, 48k, non-audio ARC), line switching, status."""
+    exe = os.path.join(B, "spdif.vvp")
+    r = subprocess.run(["iverilog", "-g2005", "-o", exe, "-s", "tb_spdif",
+                        os.path.join(ROOT, "tb", "tb_spdif.v"),
+                        os.path.join(ROOT, "tb", "tb_spdif_src.v")] + RTL,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode:
+        print(r.stdout, r.stderr)
+        return False
+    r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+    print(r.stdout)
+    ok = "PASS tb_spdif" in r.stdout
+    segs = [  # seg, ppm, fl, fr, level, limit, what
+        (0, 35.0, 1201.0, 4001.0, -1.0, -110.0, "coax 192k"),
+        (1, -80.0, 997.0, 3001.0, -1.0, -110.0, "optical 96k"),
+        (2, 12.0, 1499.0, 5003.0, -1.0, -110.0, "AES 48k"),
+        (3, 35.0, 1201.0, 4001.0, -1.0, -110.0, "coax 192k again"),
+    ]
+    for seg, ppm, fl, fr, lvl, lim, what in segs:
+        d = np.loadtxt(os.path.join(B, f"spdif_seg{seg}.txt"), ndmin=2) / 2.0 ** 31
+        d = d[1200:]
+        res = []
+        c = True
+        for ch, f0 in ((0, fl), (1, fr)):
+            fexp = f0 * (1 + ppm * 1e-6)
+            fpk, amp, thdn = analyse(d[:, ch], fexp)
+            c &= abs(fpk - fexp) < 1.0 and abs(amp - lvl) < 0.1 and thdn < lim
+            res.append(f"{'LR'[ch]} f {fpk:9.3f} {amp:6.2f} dBFS THD+N {thdn:6.1f}")
+        ok &= c
+        print(f"{'PASS' if c else 'FAIL'} spdif seg{seg} {what:16s}: " + " | ".join(res))
+    return ok
+
+def run_v2():
+    """ax-bridge2 clocks: synchronous Fox (44.1k / 96k / DSD64) without ASRC,
+    S/PDIF and phono with the meter-chosen oscillator, clock switching."""
+    import shutil
+    cache = os.path.join(B, "dsd_2822400.hex")
+    if not os.path.exists(cache):
+        nb = int(2822400 * 0.2) // 16 * 16
+        bl, br = make_dsd(2822400.0, nb, 997.0, 3001.0)
+        write_dsd_hex(bl, br, cache)
+    shutil.copy(cache, os.path.join(B, "dsd.hex"))
+    n = sum(1 for _ in open(cache))
+    exe = os.path.join(B, "v2.vvp")
+    r = subprocess.run(["iverilog", "-g2005", "-o", exe, "-s", "tb_v2", f"-Ptb_v2.DSDN={n}",
+                        os.path.join(ROOT, "tb", "tb_v2.v"), os.path.join(ROOT, "tb", "tb_src.v"),
+                        os.path.join(ROOT, "tb", "tb_spdif_src.v")] + RTL,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode:
+        print(r.stdout, r.stderr)
+        return False
+    r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+    print(r.stdout)
+    ok = "PASS tb_v2" in r.stdout
+    segs = [  # seg, fs out, ppm, fl, fr, level, limit, what
+        (0, 176400.0, 0.0, 997.0, 3001.0, -1.0, -120.0, "Fox 44.1k sync"),
+        (1, 192000.0, 0.0, 1499.0, 7001.0, -1.0, -120.0, "Fox 96k sync"),
+        (2, 176400.0, 60.0, 1499.0, 5003.0, -1.0, -110.0, "S/PDIF 44.1k ASRC"),
+        (3, 192000.0, 17.0, 1201.0, 4001.0, -1.0, -110.0, "phono 192k ASRC"),
+        (4, 176400.0, 0.0, 997.0, 3001.0, -6.02, -100.0, "Fox DSD64 sync"),
+    ]
+    for seg, fso, ppm, fl, fr, lvl, lim, what in segs:
+        try:
+            d = np.loadtxt(os.path.join(B, f"v2_seg{seg}.txt"), ndmin=2) / 2.0 ** 31
+        except Exception:
+            print(f"FAIL v2 seg{seg} {what}: no data"); ok = False; continue
+        d = d[1200:]
+        if len(d) < 1000:
+            print(f"FAIL v2 seg{seg} {what}: no data"); ok = False; continue
+        res = []
+        c = True
+        for ch, f0 in ((0, fl), (1, fr)):
+            fexp = f0 * (1 + ppm * 1e-6)
+            fpk, amp, thdn = analyse(d[:, ch], fexp, fs=fso)
+            c &= abs(fpk - fexp) < 1.0 and abs(amp - lvl) < 0.1 and thdn < lim
+            res.append(f"{'LR'[ch]} f {fpk:9.3f} {amp:6.2f} dBFS THD+N {thdn:6.1f}")
+        ok &= c
+        print(f"{'PASS' if c else 'FAIL'} v2 seg{seg} {what:18s}: " + " | ".join(res))
+    return ok
+
+def run_clip():
+    """Inter-sample-peak test: L = fs/4 sine at 45 deg, samples exactly at
+    full scale, true peak +3 dBFS. Without headroom the interpolators must
+    saturate and raise the clip flag; with 3.5 dB headroom nothing clips
+    and the level drops by exactly 3.5 dB."""
+    import math
+    ok = True
+    for att, exp_clip in ((0, 1), (7, 0)):
+        params = ["-Ptb_sys.MODE=0", "-Ptb_sys.FS=44100.0", "-Ptb_sys.PPM=23.0",
+                  "-Ptb_sys.FL=11025.0", "-Ptb_sys.FR=3001.0", "-Ptb_sys.NOUT=8192",
+                  f"-Ptb_sys.AMP={math.sqrt(2):.9f}", f"-Ptb_sys.PHL={math.pi/4:.12f}",
+                  f"-Ptb_sys.ATT={att}", "-Ptb_sys.AMPR=0.891"]
+        exe = os.path.join(B, "clip.vvp")
+        r = subprocess.run(["iverilog", "-g2005", "-o", exe, "-s", "tb_sys"] + params +
+                           [os.path.join(ROOT, "tb", "tb_sys.v")] + RTL,
+                           cwd=ROOT, capture_output=True, text=True)
+        if r.returncode:
+            print(r.stdout, r.stderr)
+            return False
+        r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+        cl = [l for l in r.stdout.splitlines() if "clip sticky" in l]
+        got = int(cl[-1].split()[-1]) if cl else -1
+        y = np.loadtxt(os.path.join(B, "sys_out.txt"), ndmin=2)[-8192:] / 2.0 ** 31
+        gain_db = 20 * math.log10(
+            [65536, 61870, 58409, 55142, 52057, 49145, 46396, 43801][att] / 65536)
+        fl, al, tl = analyse(y[:, 0], 11025.0 * (1 + 23e-6))
+        fr, ar, tr = analyse(y[:, 1], 3001.0 * (1 + 23e-6))
+        exp_r = 20 * math.log10(0.891) + gain_db
+        c = (got == exp_clip) and abs(ar - exp_r) < 0.05
+        if att:
+            exp_l = 20 * math.log10(math.sqrt(2)) + gain_db
+            c &= abs(al - exp_l) < 0.05 and tl < -110 and tr < -110
+        ok &= c
+        print(f"{'PASS' if c else 'FAIL'} clip att={att * 0.5:.1f} dB: clip flag {got} "
+              f"(exp {exp_clip}) | L {al:6.2f} dBFS THD+N {tl:6.1f} | "
+              f"R {ar:6.2f} dBFS (exp {exp_r:6.2f}) THD+N {tr:6.1f}")
+    return ok
+
+def run_hdmi():
+    """HDMI input: native DSD with automatic detection / flag / L-R order,
+    and a PCM input with auto-detect on that must stay PCM."""
+    import shutil
+    cache = os.path.join(B, "dsd_2822400.hex")
+    if not os.path.exists(cache):
+        nb = int(2822400 * 0.2) // 16 * 16
+        bl, br = make_dsd(2822400.0, nb, 997.0, 3001.0)
+        write_dsd_hex(bl, br, cache)
+    shutil.copy(cache, os.path.join(B, "dsd.hex"))
+    n = sum(1 for _ in open(cache))
+    exe = os.path.join(B, "hdmi.vvp")
+    r = subprocess.run(["iverilog", "-g2005", "-o", exe, "-s", "tb_hdmi",
+                        f"-Ptb_hdmi.DSDN={n}", os.path.join(ROOT, "tb", "tb_hdmi.v"),
+                        os.path.join(ROOT, "tb", "tb_src.v"), os.path.join(ROOT, "tb", "tb_spdif_src.v")] + RTL,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode:
+        print(r.stdout, r.stderr)
+        return False
+    r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+    print(r.stdout)
+    ok = "PASS tb_hdmi" in r.stdout
+    segs = [  # seg, ppm, fl, fr, level, limit, what
+        (0, -45.0, 1499.0, 5003.0, -1.0, -110.0, "in2 PCM 96, auto on"),
+        (1, -27.0, 997.0, 3001.0, -6.02, -100.0, "in3 DSD64 auto"),
+        (2, -27.0, 3001.0, 997.0, -6.02, -100.0, "in3 DSD64 L/R swapped"),
+        (3, -27.0, 997.0, 3001.0, -6.02, -100.0, "in3 DSD64 flag"),
+    ]
+    for seg, ppm, fl, fr, lvl, lim, what in segs:
+        d = np.loadtxt(os.path.join(B, f"hdmi_seg{seg}.txt"), ndmin=2) / 2.0 ** 31
+        d = d[1200:] if seg != 2 else d
+        res = []
+        c = True
+        for ch, f0 in ((0, fl), (1, fr)):
+            fexp = f0 * (1 + ppm * 1e-6)
+            fpk, amp, thdn = analyse(d[:, ch], fexp)
+            c &= abs(fpk - fexp) < 1.0 and abs(amp - lvl) < 0.1 and thdn < lim
+            res.append(f"{'LR'[ch]} f {fpk:9.3f} {amp:6.2f} dBFS THD+N {thdn:6.1f}")
+        ok &= c
+        print(f"{'PASS' if c else 'FAIL'} hdmi seg{seg} {what:22s}: " + " | ".join(res))
+    return ok
+
+def run_eq():
+    """EQ loaded over I2C into the running bridge: the tone levels must
+    follow the designed response, then a live bypass restores -1 dBFS."""
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import eq_coefs as E
+    fl, fr, ppm = 997.0, 7003.0, -31.0
+    L = [E.rbj("PK", 1000, -6, 2), E.rbj("LS", 100, 3, 0.7)]
+    R = [E.rbj("PK", 7000, -3.5, 1.5), E.rbj("HP", 20, 0, 0.707)]
+    n, w = E.words(L, R)
+    data = E.i2c_bytes(n, w)[1][1]
+    with open(os.path.join(B, "eqsys_b1.hex"), "w") as f:
+        for b in data:
+            f.write("%02x\n" % b)
+    exe = os.path.join(B, "eqsys.vvp")
+    r = subprocess.run(["iverilog", "-g2005", "-o", exe, "-s", "tb_eqsys",
+                        f"-Ptb_eqsys.NB1={len(data)}", f"-Ptb_eqsys.NS1={n}",
+                        os.path.join(ROOT, "tb", "tb_eqsys.v"),
+                        os.path.join(ROOT, "tb", "tb_src.v"), os.path.join(ROOT, "tb", "tb_spdif_src.v")] + RTL,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode:
+        print(r.stdout, r.stderr)
+        return False
+    r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+    print(r.stdout)
+    ok = "PASS tb_eqsys" in r.stdout
+    q = lambda secs: [[v / E.ONE for v in E.quantise(c)] for c in secs]
+    for seg, (sl, sr) in ((0, (q(L), q(R))), (1, ([], []))):
+        d = np.loadtxt(os.path.join(B, f"eqsys_seg{seg}.txt"), ndmin=2) / 2.0 ** 31
+        res = []
+        for ch, f0, secs in ((0, fl, sl), (1, fr, sr)):
+            fexp = f0 * (1 + ppm * 1e-6)
+            exp = -1.0 + 20 * np.log10(E.response(secs, fexp)) if secs else -1.0
+            fpk, amp, thdn = analyse(d[:, ch], fexp)
+            c = abs(fpk - fexp) < 0.5 and abs(amp - exp) < 0.05 and thdn < -110
+            ok &= c
+            res.append(f"{'LR'[ch]} {amp:6.2f} dBFS (exp {exp:6.2f}) THD+N {thdn:6.1f}")
+        print(f"{'PASS' if ok else 'FAIL'} eq seg{seg} ({'EQ on' if seg == 0 else 'bypass'}): "
+              + " | ".join(res))
+    return ok
+
+if __name__ == "__main__":
+    if sys.argv[1:2] == ["--hdmi"]:
+        sys.exit(0 if run_hdmi() else 1)
+    if sys.argv[1:2] == ["--eq"]:
+        sys.exit(0 if run_eq() else 1)
+    if sys.argv[1:2] == ["--clip"]:
+        sys.exit(0 if run_clip() else 1)
+    if sys.argv[1:2] == ["--v2"]:
+        sys.exit(0 if run_v2() else 1)
+    if sys.argv[1:2] == ["--spdif"]:
+        sys.exit(0 if run_spdif() else 1)
+    if sys.argv[1:2] == ["--mux"]:
+        sys.exit(0 if run_mux() else 1)
+    if sys.argv[1:2] == ["--switch"]:
+        sys.exit(0 if run_switch() else 1)
+    if sys.argv[1:2] == ["--silicon"]:
+        # real rate_mon window and real DPLL gear lengths (slow: ~30 min)
+        ok = run_case(sys.argv[2] if len(sys.argv) > 2 else "pcm44",
+                      extra=["-Ptb_sys.TB_WBITS=18", "-Ptb_sys.TB_GSH=0",
+                             "-Ptb_sys.TMAX_MS=800.0"])
+        sys.exit(0 if ok else 1)
+    names = sys.argv[1:] or list(CASES)
+    ok = True
+    for n in names:
+        lim = -110.0 if CASES[n][0] == 0 else -100.0
+        ok &= run_case(n, thdn_limit=lim)
+    print("PASS system" if ok else "FAIL system")
+    sys.exit(0 if ok else 1)
