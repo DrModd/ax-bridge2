@@ -8,6 +8,8 @@ module tb_hdmi;
     parameter integer DSDN = 1;
     reg mclk = 0;
     always #10.1725 mclk = ~mclk;
+    reg sclk = 0;
+    always #10.0 sclk = ~sclk;        // 50 MHz service clock
 
     wire b2, l2, d2, x2, b3, l3, d3, x3;
     reg  hflag = 1'b0;
@@ -21,8 +23,8 @@ module tb_hdmi;
     assign i2c_sda = sda_m ? 1'bz : 1'b0;
 
     wire obclk, olrck, osdata, audio_on;
-    top #(.WBITS(16), .GSH(4)) dut (
-        .mclk_in(mclk),
+    top #(.CLK_CTRL_RST(4'b0000), .WBITS(16), .GSH(4)) dut (
+        .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0),
         .i2s_bclk_in(1'b0), .i2s_lrck_in(1'b0), .i2s_sdata_in(1'b0), .dsd_on(1'b0),
         .spdif_in(4'b0000),
         .in2_bclk(b2), .in2_lrck(l2), .in2_sdata(d2),
@@ -160,7 +162,7 @@ module tb_hdmi;
     initial begin
         #(3e6);
         rd_regs(8'h05, r0, r1, r2, r3);
-        check(r0, 8'hA5, "ID"); check(r1, 8'h07, "VERSION");
+        check(r0, 8'hA5, "ID"); check(r1, 8'h20, "VERSION");
         rd_regs(8'h0D, r0, r1, r2, r3);
         check(r0, 8'hC1, "DSD_MODE"); check(r1, 8'h0F, "DSD_CFG");
         // in2: PCM with auto-detect on

@@ -8,6 +8,8 @@ module tb_switch;
     parameter integer DSDN = 1;
     reg mclk = 0;
     always #10.1725 mclk = ~mclk;
+    reg sclk = 0;
+    always #10.0 sclk = ~sclk;        // 50 MHz service clock
 
     // segment table: mode (0 PCM, 1 DSD, 2 DoP), rate, length ms, gap ms
     integer seg = 0;
@@ -84,8 +86,8 @@ module tb_switch;
 
     wire obclk, olrck, osdata, audio_on;
     tri1 i2c_sda;
-    top #(.WBITS(16), .GSH(4)) dut (
-        .mclk_in(mclk), .i2s_bclk_in(bclk), .i2s_lrck_in(lrck),
+    top #(.CLK_CTRL_RST(4'b0000), .WBITS(16), .GSH(4)) dut (
+        .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0), .i2s_bclk_in(bclk), .i2s_lrck_in(lrck),
         .i2s_sdata_in(sdata), .dsd_on(dsd_on),
         .spdif_in(4'b0000),
         .in2_bclk(1'b0), .in2_lrck(1'b0), .in2_sdata(1'b0),
@@ -114,8 +116,8 @@ module tb_switch;
     integer got_path [0:5];
     always @(posedge audio_on) begin
         $display("%8.2f ms  audio_on  seg %0d path %0d (expect %0d)", $realtime / 1e6,
-                 seg, dut.path, spath[seg]);
-        got_path[seg] = dut.path;
+                 seg, dut.u_core.path, spath[seg]);
+        got_path[seg] = dut.u_core.path;
         locks = locks + 1;
     end
     always @(negedge audio_on)

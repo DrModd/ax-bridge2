@@ -2,14 +2,14 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 RTL := rtl/mem.v rtl/afifo.v rtl/in_mux.v rtl/bclk_rx.v rtl/spdif_rx.v rtl/rate_mon.v rtl/dop_det.v \
-       rtl/cic5_dsd.v rtl/fir_stage.v rtl/asrc.v rtl/i2s_tx32.v rtl/i2c_slave.v rtl/eq_biquad.v rtl/core.v rtl/top.v
+       rtl/cic5_dsd.v rtl/fir_csd.v rtl/asrc.v rtl/i2s_tx32.v rtl/i2c_slave.v rtl/eq_biquad.v rtl/core.v rtl/top.v
 
-.PHONY: all verify coef units eq eqsys hdmi spdif corner sys switch mux clip recover lint synth jf jf_audio clean
+.PHONY: all verify coef units csd v2 eq eqsys hdmi spdif corner sys switch mux clip recover lint synth jf jf_audio clean
 
 all: verify
 
 # Everything that must be green before flashing.
-verify: coef lint units eq corner synth sys switch mux clip recover eqsys hdmi spdif
+verify: coef lint units csd eq corner synth sys switch mux clip recover eqsys hdmi spdif v2
 
 coef:
 	python3 tools/gen_coefs.py --check
@@ -51,8 +51,17 @@ hdmi:
 
 # S/PDIF receiver: four lines (192k with jitter and duty distortion, 96k,
 # 48k, non-audio ARC that must stay silent), line switching, status.
+# Multiplier-free FIRs: fir_csd (shift-and-add) bit-exact against
+# fir_stage (multiplier) for all five filters at their highest input rate.
+csd:
+	python3 tb/run_csd.py
+
 spdif:
 	python3 tb/run_sys.py --spdif
+
+# ax-bridge2 clocks: synchronous Fox, meter-chosen oscillator, switching
+v2:
+	python3 tb/run_sys.py --v2
 
 # System benches: 10 PCM rates, DSD64..512, DoP64..256 with clock offsets,
 # output decoded from the I2S pins, THD+N / level / frequency checked.

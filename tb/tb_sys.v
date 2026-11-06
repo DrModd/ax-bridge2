@@ -24,6 +24,8 @@ module tb_sys;
     // ---------------- local 49.152 MHz ----------------
     reg mclk = 0;
     always #10.1725 mclk = ~mclk;
+    reg sclk = 0;
+    always #10.0 sclk = ~sclk;        // 50 MHz service clock
 
     // ---------------- transport ----------------
     reg bclk = 0, lrck = 0, sdata = 0, dsd_on = 0;
@@ -93,8 +95,8 @@ module tb_sys;
     // ---------------- DUT ----------------
     wire obclk, olrck, osdata, audio_on;
     tri1 i2c_sda;
-    top #(.WBITS(TB_WBITS), .GSH(TB_GSH), .ATT_DEFAULT(ATT)) dut (
-        .mclk_in(mclk), .i2s_bclk_in(bclk), .i2s_lrck_in(lrck),
+    top #(.CLK_CTRL_RST(4'b0000), .WBITS(TB_WBITS), .GSH(TB_GSH), .ATT_DEFAULT(ATT)) dut (
+        .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0), .i2s_bclk_in(bclk), .i2s_lrck_in(lrck),
         .i2s_sdata_in(sdata), .dsd_on(dsd_on),
         .spdif_in(4'b0000),
         .in2_bclk(1'b0), .in2_lrck(1'b0), .in2_sdata(1'b0),
@@ -128,7 +130,7 @@ module tb_sys;
     always @(posedge audio_on) begin
         if (t_on < 0) t_on = $realtime;
         $display("audio_on at %0.2f ms (path %0d k %0d fam48 %0d)", $realtime / 1.0e6,
-                 dut.path, dut.cfg_k, dut.cfg_fam48);
+                 dut.u_core.path, dut.u_core.cfg_k, dut.u_core.cfg_fam48);
     end
     always @(negedge audio_on)
         if (t_on >= 0) $display("audio_off at %0.2f ms", $realtime / 1.0e6);
@@ -140,7 +142,7 @@ module tb_sys;
         $finish;
     end
     always @(posedge mclk) if (ncap >= NOUT) begin
-        $display("CAPTURED %0d samples, gear %0d, clip sticky %0d", ncap, dut.a_gear, dut.clip_sticky);
+        $display("CAPTURED %0d samples, gear %0d, clip sticky %0d", ncap, dut.u_core.a_gear, dut.clip_sticky);
         $fclose(fo);
         $finish;
     end

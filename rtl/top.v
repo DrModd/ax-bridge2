@@ -37,6 +37,7 @@ module top #(
     parameter integer CLK_SETTLE_MS = 20, // oscillator start-up after a switch
     parameter integer ACK_WAIT_MS = 300,  // STM32 acknowledge time-out
     parameter MWBITS = 18,                // frequency meter window 2^MWBITS sys clocks
+    parameter [3:0] CLK_CTRL_RST = 4'b1101,   // CLK_CTRL after reset (0x14); 4'b0000 = fixed 49.152 MHz, no sync path
     parameter COEF_DIR = "coef/"
 ) (
     input  wire sys_clk,        // 50 MHz service clock
@@ -333,7 +334,7 @@ module top #(
             ctl_sel <= 3'd0; ctl_sline <= 2'd0; ctl_mute <= 1'b0; ctl_att <= ATT_DEFAULT;
             ctl_dmode <= 8'hC1; ctl_dinv <= 4'd0;
             ctl_dswap <= {3'b111, (DSD_SDATA_IS_RIGHT != 0)};
-            ctl_clk <= 4'b1101;
+            ctl_clk <= CLK_CTRL_RST;
             ack <= 1'b0;
         end else begin
             ack <= 1'b0;

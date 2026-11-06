@@ -6,6 +6,7 @@
 //
 //   FIFO items (input front end or the S/PDIF receiver)
 //     -> PCM headroom -> half-band x2/x4 / /2 /4, or CIC5 + FIR for DSD
+//        (all five FIRs multiplier-free: shift-and-add, rtl/fir_csd.v)
 //     -> 176.4 / 192 kHz intermediate stream
 //     -> synchronous source (Fox on our MCLK): small elastic buffer, no ASRC
 //        any other source: ASRC with a nominal ratio of 1 (it only absorbs
@@ -268,25 +269,25 @@ module core #(
     wire ovf_a, ovf_b, ovf_c, ovf_d, ovf_e, ovf_f;
     wire clp_a, clp_b, clp_c, clp_d, clp_f, clp_s;
 
-    fir_stage #(.N(175), .INTERP(1), .AW(7), .CAW(8), .FILE({COEF_DIR, "hb_a.bin"})) u_hba (
+    fir_csd #(.N(175), .INTERP(1), .AW(7), .PW(9), .PLEN(322), .P1(319), .FILE({COEF_DIR, "hb_a.prog"})) u_hba (
         .clk(clk), .rst_n(rst_n), .clr(stg_clr),
         .in_valid(pcm_feed && path == P_X4), .in_l(pl), .in_r(pr),
         .out_valid(hba_v), .out_l(hba_l), .out_r(hba_r), .ovf(ovf_a), .clip(clp_a));
 
     wire hbb_in = (path == P_X4) ? hba_v : (pcm_feed && path == P_X2);
-    fir_stage #(.N(91), .INTERP(1), .AW(6), .CAW(7), .FILE({COEF_DIR, "hb_b.bin"})) u_hbb (
+    fir_csd #(.N(91), .INTERP(1), .AW(6), .PW(8), .PLEN(184), .P1(181), .FILE({COEF_DIR, "hb_b.prog"})) u_hbb (
         .clk(clk), .rst_n(rst_n), .clr(stg_clr),
         .in_valid(hbb_in),
         .in_l(path == P_X4 ? hba_l : pl), .in_r(path == P_X4 ? hba_r : pr),
         .out_valid(hbb_v), .out_l(hbb_l), .out_r(hbb_r), .ovf(ovf_b), .clip(clp_b));
 
-    fir_stage #(.N(23), .INTERP(0), .AW(5), .CAW(5), .FILE({COEF_DIR, "hd_a.bin"})) u_hda (
+    fir_csd #(.N(23), .INTERP(0), .AW(5), .PW(6), .PLEN(50), .FILE({COEF_DIR, "hd_a.prog"})) u_hda (
         .clk(clk), .rst_n(rst_n), .clr(stg_clr),
         .in_valid(pcm_feed && path == P_D4), .in_l(pl), .in_r(pr),
         .out_valid(hda_v), .out_l(hda_l), .out_r(hda_r), .ovf(ovf_c), .clip(clp_c));
 
     wire hdb_in = (path == P_D4) ? hda_v : (pcm_feed && path == P_D2);
-    fir_stage #(.N(31), .INTERP(0), .AW(5), .CAW(5), .FILE({COEF_DIR, "hd_b.bin"})) u_hdb (
+    fir_csd #(.N(31), .INTERP(0), .AW(5), .PW(7), .PLEN(66), .FILE({COEF_DIR, "hd_b.prog"})) u_hdb (
         .clk(clk), .rst_n(rst_n), .clr(stg_clr),
         .in_valid(hdb_in),
         .in_l(path == P_D4 ? hda_l : pl), .in_r(path == P_D4 ? hda_r : pr),
@@ -303,7 +304,8 @@ module core #(
         .in_valid(cic_in), .in_l(ch_l), .in_r(ch_r),
         .out_valid(cic_v), .out_l(cic_l), .out_r(cic_r), .ovf(ovf_e));
 
-    fir_stage #(.N(95), .INTERP(0), .AW(7), .CAW(7), .FILE({COEF_DIR, "dsd.bin"})) u_dsf (
+    fir_csd #(.N(95), .INTERP(0), .AW(7), .PW(8), .PLEN(169), .FILE({COEF_DIR, "dsd.prog"}),
+              .LANES(2), .PLEN2(166), .FILE2({COEF_DIR, "dsd.prog2"})) u_dsf (
         .clk(clk), .rst_n(rst_n), .clr(stg_clr),
         .in_valid(cic_v), .in_l(cic_l), .in_r(cic_r),
         .out_valid(dsf_v), .out_l(dsf_l), .out_r(dsf_r), .ovf(ovf_f), .clip(clp_f));

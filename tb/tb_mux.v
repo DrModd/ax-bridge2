@@ -9,6 +9,8 @@ module tb_mux;
     parameter integer DSDN = 1;
     reg mclk = 0;
     always #10.1725 mclk = ~mclk;
+    reg sclk = 0;
+    always #10.0 sclk = ~sclk;        // 50 MHz service clock
 
     wire b0, l0, d0, dsd0, b1, l1, d1, x1, b2, l2, d2, x2, b3, l3, d3, x3;
     wire b4, l4, d4, x4;
@@ -29,8 +31,8 @@ module tb_mux;
     assign i2c_sda = sda_m ? 1'bz : 1'b0;
 
     wire obclk, olrck, osdata, audio_on;
-    top #(.WBITS(16), .GSH(4)) dut (
-        .mclk_in(mclk),
+    top #(.CLK_CTRL_RST(4'b0000), .WBITS(16), .GSH(4)) dut (
+        .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0),
         .i2s_bclk_in(b0), .i2s_lrck_in(l0), .i2s_sdata_in(d0), .dsd_on(dsd0),
         .spdif_in({3'b000, sp1}),
         .in2_bclk(b2), .in2_lrck(l2), .in2_sdata(d2),
@@ -152,7 +154,7 @@ module tb_mux;
     initial begin
         #(5e6);
         rd_regs(8'h05, r0, r1, r2, r3);
-        check(r0, 8'hA5, "ID"); check(r1, 8'h07, "VERSION");
+        check(r0, 8'hA5, "ID"); check(r1, 8'h20, "VERSION");
         // input 0 (default): DSD64
         wait_on(60.0);
         rd_regs(8'h00, r0, r1, r2, r3);

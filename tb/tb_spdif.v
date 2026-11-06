@@ -8,6 +8,8 @@
 module tb_spdif;
     reg mclk = 0;
     always #10.1725 mclk = ~mclk;
+    reg sclk = 0;
+    always #10.0 sclk = ~sclk;        // 50 MHz service clock
 
     wire [3:0] sp;
     tb_spdif_src #(.FS(192000.0), .PPM(35.0), .FL(1201.0), .FR(4001.0), .JIT(4.0), .DUTY(10.0),
@@ -23,8 +25,8 @@ module tb_spdif;
     assign i2c_sda = sda_m ? 1'bz : 1'b0;
 
     wire obclk, olrck, osdata, audio_on;
-    top #(.WBITS(16), .GSH(4)) dut (
-        .mclk_in(mclk),
+    top #(.CLK_CTRL_RST(4'b0000), .WBITS(16), .GSH(4)) dut (
+        .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0),
         .i2s_bclk_in(1'b0), .i2s_lrck_in(1'b0), .i2s_sdata_in(1'b0), .dsd_on(1'b0),
         .spdif_in(sp),
         .in2_bclk(1'b0), .in2_lrck(1'b0), .in2_sdata(1'b0),
@@ -162,7 +164,7 @@ module tb_spdif;
     initial begin
         #(3e6);
         rd_regs(8'h05, r0, r1, r2, r3);
-        check(r0, 8'hA5, "ID"); check(r1, 8'h07, "VERSION");
+        check(r0, 8'hA5, "ID"); check(r1, 8'h20, "VERSION");
         // line 0: coax 192k
         wr_reg(8'h00, 8'h01);
         wait_on(80.0);

@@ -110,6 +110,91 @@ def build():
     res["asrc"] = (hq,)
     return res
 
+# ---------------------------------------------------------------- CSD programs
+# Multiplier-free FIR (rtl/fir_csd.v): each output is a short program for a
+# shift-and-add engine. Ops (16 bit):
+#   00 LOAD off   x  = h[newest - off]          (both channels)
+#   01 ADD  off   x += h[newest - off]          (symmetric partner)
+#   10 TERM s sh  acc += (s ? -x : x) << sh     (one CSD digit)
+#   11 END        output (rounded, saturated)
+# Coefficients are the same integers as the multiplier ROMs, written in
+# canonical signed digits, so the result is bit-identical.
+def csd_digits(v):
+    """canonical signed-digit form: list of (sign, shift), sign 1 = negative"""
+    out = []
+    x = abs(int(v))
+    neg = v < 0
+    sh = 0
+    while x:
+        if x & 1:
+            if (x & 3) == 3:
+                out.append((not neg, sh)); x += 1
+            else:
+                out.append((neg, sh)); x -= 1
+        x >>= 1
+        sh += 1
+    return out
+
+def csd_program(c, interp):
+    N = len(c)
+    phases = [0, 1] if interp else [0]
+    prog, starts = [], []
+    for p in phases:
+        starts.append(len(prog))
+        if interp:
+            taps = {t: int(c[2 * t + p]) for t in range((N - p + 1) // 2) if 2 * t + p < N}
+            tap_k = {t: 2 * t + p for t in taps}
+        else:
+            taps = {t: int(c[t]) for t in range(N)}
+            tap_k = {t: t for t in taps}
+        k_tap = {k: t for t, k in tap_k.items()}
+        done = set()
+        for t in sorted(taps):
+            if t in done or taps[t] == 0:
+                continue
+            k = tap_k[t]
+            km = N - 1 - k
+            tm = k_tap.get(km)
+            prog.append((0 << 14) | t)
+            done.add(t)
+            if tm is not None and tm != t and taps[tm] == taps[t]:
+                prog.append((1 << 14) | tm)
+                done.add(tm)
+            for sg, sh in csd_digits(taps[t]):
+                prog.append((2 << 14) | (int(sg) << 13) | (sh << 8))
+        prog.append(3 << 14)
+    return prog, starts
+
+def split_lanes(prog):
+    """split a one-phase program into two balanced lanes (whole coefficient
+    groups: a LOAD with its ADD and digits), each ending with END"""
+    groups, g = [], []
+    for w in prog[:-1]:
+        if (w >> 14) == 0 and g:
+            groups.append(g); g = []
+        g.append(w)
+    groups.append(g)
+    lanes = [[], []]
+    for g in sorted(groups, key=len, reverse=True):     # greedy balance
+        (lanes[0] if len(lanes[0]) <= len(lanes[1]) else lanes[1]).extend(g)
+    return [l + [3 << 14] for l in lanes]
+
+def write_progs(res):
+    info = {}
+    for name in ("hb_a", "hb_b", "hd_a", "hd_b", "dsd"):
+        hq = res[name][0]
+        interp = name.startswith("hb_")
+        prog, starts = csd_program(hq, interp)
+        if name == "dsd":                    # 352.8 kHz in, 256 MCLK per output: two lanes
+            l0, l1 = split_lanes(prog)
+            write_bin(f"{name}.prog", l0, 16)
+            write_bin(f"{name}.prog2", l1, 16)
+            info[name] = (len(l0), [0], len(l1))
+        else:
+            write_bin(f"{name}.prog", prog, 16)
+            info[name] = (len(prog), starts, 0)
+    return info
+
 def check(res):
     for name in ("hb_a", "hb_b", "hd_a", "hd_b", "dsd"):
         hq, fs, fp, fst, gain = res[name]
@@ -128,5 +213,9 @@ def check(res):
 
 if __name__ == "__main__":
     r = build()
+    pi = write_progs(r)
+    if "--check" in sys.argv:
+        for n, (ln, st, l2) in pi.items():
+            print(f"{n:5s} CSD program {ln} ops, phase starts {st}" + (f", lane 1 {l2} ops" if l2 else ""))
     if "--check" in sys.argv:
         check(r)
