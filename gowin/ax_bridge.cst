@@ -5,7 +5,7 @@
 // ---- Clocks: every clock on a GCLKT (true global clock) pin ----
 // 50 MHz oscillator on the Tang Primer 25K module (GCLKT_10B) - service domain
 IO_LOC "sys_clk" E2;
-IO_PORT "sys_clk" IO_TYPE=LVCMOS33 BANK_VCCIO=3.3;
+IO_PORT "sys_clk" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
 
 // audio MCLK from the oscillator multiplexer, J1-51 (GCLKT_13)
 IO_LOC "mclk_in" C11;
