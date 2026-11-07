@@ -9,7 +9,7 @@ RTL := rtl/mem.v rtl/afifo.v rtl/in_mux.v rtl/bclk_rx.v rtl/spdif_rx.v rtl/rate_
 all: verify
 
 # Everything that must be green before flashing.
-verify: coef lint units csd eq corner synth sys switch mux clip recover eqsys hdmi spdif v2
+verify: coef lint units csd eq corner synth sys switch mux clip recover eqsys hdmi spdif v2 sync4 async
 
 coef:
 	python3 tools/gen_coefs.py --check
@@ -63,6 +63,19 @@ spdif:
 v2:
 	python3 tb/run_sys.py --v2
 
+# Synchronous phono ADC (SYNC_IN4 = 1, AK5572 on our MCLK): sync path on
+# both oscillators (192 / 176.4 kHz), the ADC never moves the clock, it
+# follows a forced switch (CLK_CTRL 0x04) and survives the return to 0x0D.
+sync4:
+	python3 tb/run_sys.py --sync4
+
+# All-async mode entered and left at run time (CLK_CTRL 0x0D -> 0x00 -> 0x0D):
+# 49.152 MHz fixed, Fox 44.1/96 on its own clock, S/PDIF 44.1 and the
+# synchronous phono ADC all through the ASRC; the Fox pin and the manual
+# family bit ignored; back to 0x0D with the STM32 handshake.
+async:
+	python3 tb/run_sys.py --async
+
 # System benches: 10 PCM rates, DSD64..512, DoP64..256 with clock offsets,
 # output decoded from the I2S pins, THD+N / level / frequency checked.
 # ~25-40 min with Icarus; single case: python3 tb/run_sys.py pcm44
@@ -93,13 +106,16 @@ recover:
 	grep -q "PASS tb_recover" build/recover.log
 
 # Elaboration gate (the real synthesis is Gowin IDE):
-# 13 multipliers, 15 inferred memories (14 BSRAM + headroom gain ROM), no errors.
+# 8 multipliers (ASRC 3, EQ 1, headroom 2, fade 2; the five FIRs are
+# shift-and-add since fir_csd), 20 inferred memories (6 FIR programs +
+# 6 FIR histories, ASRC ring + kernel, EQ coefficients, input FIFO,
+# S/PDIF FIFO, synchronous-path buffer L/R, headroom gain ROM), no errors.
 synth:
 	mkdir -p build
 	yosys -p "read_verilog $(RTL); hierarchy -check -top top; proc; opt -fast; memory -nomap; opt -fast; flatten; stat" > build/synth.log
 	! grep -iE "error" build/synth.log
-	grep -E -q '[$$]mul +13$$' build/synth.log
-	grep -E -q '[$$]mem_v2 +15$$' build/synth.log
+	grep -E -q '[$$]mul +8$$' build/synth.log
+	grep -E -q '[$$]mem_v2 +20$$' build/synth.log
 
 # ---- jitter_fifo (standalone module, not yet wired into top) ----
 JF = jitter_fifo/rtl/jitter_fifo.v jitter_fifo/tb/tb_jitter_fifo.v

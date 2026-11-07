@@ -303,6 +303,69 @@ def run_v2():
         print(f"{'PASS' if c else 'FAIL'} v2 seg{seg} {what:18s}: " + " | ".join(res))
     return ok
 
+def run_bench(top, pfx, segs, srcs=("tb_sync_src.v",)):
+    """Compile and run a self-checking clock bench (tb/<top>.v), then check
+    every captured segment: frequency, level and THD+N per channel.
+    segs: (seg, fs out, ppm, fl, fr, level dBFS, THD+N limit, what)."""
+    exe = os.path.join(B, f"{pfx}.vvp")
+    for seg in segs:
+        p = os.path.join(B, f"{pfx}_seg{seg[0]}.txt")
+        if os.path.exists(p):
+            os.remove(p)
+    r = subprocess.run(["iverilog", "-g2005", "-Wall", "-I", os.path.join(ROOT, "tb"), "-o", exe,
+                        "-s", top, os.path.join(ROOT, "tb", f"{top}.v")]
+                       + [os.path.join(ROOT, "tb", s) for s in srcs] + RTL,
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode:
+        print(r.stdout, r.stderr)
+        return False
+    r = subprocess.run(["vvp", "-n", exe], cwd=ROOT, capture_output=True, text=True)
+    print(r.stdout)
+    ok = f"PASS {top}" in r.stdout
+    for seg, fso, ppm, fl, fr, lvl, lim, what in segs:
+        try:
+            d = np.loadtxt(os.path.join(B, f"{pfx}_seg{seg}.txt"), ndmin=2) / 2.0 ** 31
+        except Exception:
+            print(f"FAIL {pfx} seg{seg} {what}: no data"); ok = False; continue
+        d = d[1200:]
+        if len(d) < 2000:
+            print(f"FAIL {pfx} seg{seg} {what}: no data"); ok = False; continue
+        res = []
+        c = True
+        for ch, f0 in ((0, fl), (1, fr)):
+            fexp = f0 * (1 + ppm * 1e-6)
+            fpk, amp, thdn = analyse(d[:, ch], fexp, fs=fso)
+            # 0.1 Hz (the estimate is good to ~0.02 Hz here): a wrong output
+            # rate, 176.4 instead of 192 kHz, is off by 8.8 %
+            c &= abs(fpk - fexp) < 0.1 and abs(amp - lvl) < 0.1 and thdn < lim
+            res.append(f"{'LR'[ch]} f {fpk:9.3f} {amp:6.2f} dBFS THD+N {thdn:6.1f}")
+        ok &= c
+        print(f"{'PASS' if c else 'FAIL'} {pfx} seg{seg} {what:24s}: " + " | ".join(res))
+    print(f"{'PASS' if ok else 'FAIL'} {pfx}")
+    return ok
+
+def run_sync4():
+    """Synchronous phono ADC (SYNC_IN4 = 1): no ASRC on either oscillator,
+    no clock switch caused by the ADC, the ADC follows a forced switch."""
+    # A synchronous source keeps its tone exactly on the output grid: in
+    # output-sample terms the frequency is the nominal one (ppm 0).
+    return run_bench("tb_sync4", "s4", [
+        (0, 192000.0, 0.0, 1201.0, 4001.0, -1.0, -120.0, "phono 192k sync"),
+        (1, 176400.0, 0.0, 1201.0, 4001.0, -1.0, -120.0, "phono 176.4k sync"),
+        (2, 192000.0, 0.0, 1201.0, 4001.0, -1.0, -120.0, "phono 192k after switch"),
+    ])
+
+def run_async():
+    """All-asynchronous mode (CLK_CTRL = 0x00): 49.152 MHz fixed, every
+    input (Fox, S/PDIF, synchronous phono) through the full ASRC."""
+    return run_bench("tb_async", "aa", [
+        (0, 192000.0, 37.0, 997.0, 3001.0, -1.0, -110.0, "Fox 44.1k own clk ASRC"),
+        (1, 192000.0, -23.0, 1499.0, 7001.0, -1.0, -110.0, "Fox 96k own clk ASRC"),
+        (2, 192000.0, 60.0, 1499.0, 5003.0, -1.0, -110.0, "S/PDIF 44.1k ASRC"),
+        (3, 192000.0, 0.0, 1201.0, 4001.0, -1.0, -110.0, "phono (our MCLK) ASRC"),
+        (4, 176400.0, 0.0, 997.0, 3001.0, -1.0, -120.0, "back to 0x0D: Fox sync"),
+    ], srcs=("tb_sync_src.v", "tb_src.v", "tb_spdif_src.v"))
+
 def run_clip():
     """Inter-sample-peak test: L = fs/4 sine at 45 deg, samples exactly at
     full scale, true peak +3 dBFS. Without headroom the interpolators must
@@ -439,6 +502,10 @@ if __name__ == "__main__":
         sys.exit(0 if run_clip() else 1)
     if sys.argv[1:2] == ["--v2"]:
         sys.exit(0 if run_v2() else 1)
+    if sys.argv[1:2] == ["--sync4"]:
+        sys.exit(0 if run_sync4() else 1)
+    if sys.argv[1:2] == ["--async"]:
+        sys.exit(0 if run_async() else 1)
     if sys.argv[1:2] == ["--spdif"]:
         sys.exit(0 if run_spdif() else 1)
     if sys.argv[1:2] == ["--mux"]:
