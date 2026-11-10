@@ -4,12 +4,12 @@ SHELL := /bin/bash
 RTL := rtl/mem.v rtl/afifo.v rtl/in_mux.v rtl/bclk_rx.v rtl/spdif_rx.v rtl/rate_mon.v rtl/dop_det.v \
        rtl/cic5_dsd.v rtl/fir_csd.v rtl/asrc.v rtl/i2s_tx32.v rtl/i2c_slave.v rtl/eq_biquad.v rtl/core.v rtl/top.v
 
-.PHONY: all verify coef units csd v2 eq eqsys hdmi spdif corner sys switch mux clip recover lint synth jf jf_audio clean
+.PHONY: all verify coef units csd v2 eq eqsys hdmi spdif spdif_stress corner sys switch mux clip recover lint synth jf jf_audio clean
 
 all: verify
 
 # Everything that must be green before flashing.
-verify: coef lint units csd eq corner synth sys switch mux clip recover eqsys hdmi spdif v2 sync4 async
+verify: coef lint units csd eq corner synth sys switch mux clip recover eqsys hdmi spdif v2 sync4 async spdif_stress
 
 coef:
 	python3 tools/gen_coefs.py --check
@@ -58,6 +58,13 @@ csd:
 
 spdif:
 	python3 tb/run_sys.py --spdif
+
+# S/PDIF receiver alone: line switches, on-the-fly rate changes, IEC 61937 bursts
+spdif_stress:
+	mkdir -p build
+	iverilog -g2005 -DNSW=60 -s tb_spdif_stress -o build/spdif_stress.vvp tb/tb_spdif_stress.v rtl/spdif_rx.v
+	vvp -n build/spdif_stress.vvp | grep -v 'switch to\|rate change' | tee build/spdif_stress.log
+	grep -q '^PASS' build/spdif_stress.log
 
 # ax-bridge2 clocks: synchronous Fox, meter-chosen oscillator, switching
 v2:
