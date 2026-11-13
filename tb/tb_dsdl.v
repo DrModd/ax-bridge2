@@ -15,6 +15,8 @@
 //      (for the D2 layout "RIGHT" then comes from the DSD_L line)
 //   2. back to bit 0 = 1, Fox PCM 44.1k (-17 ppm), 997 / 3001 Hz: the PCM
 //      path ignores i2s_dsdl_in
+//   3. Fox DoP64 (176.4k frames, +31 ppm), L 1000 / R 3000 Hz: DoP rides on
+//      LRCK as before, i2s_dsdl_in carries noise
 // Also: VERSION 0x21, CLK_CTRL 0x00, CLK_CTRL bits [1:0] locked to 0 (one
 // oscillator), mclk_sel never leaves 0.
 module tb_dsdl;
@@ -24,23 +26,25 @@ module tb_dsdl;
     reg mclk = 0;  always #10.172526 mclk = ~mclk;         // 49.152 MHz, the only oscillator
 
     // ---- the Fox: native DSD64 or PCM 44.1k, each on its own clock ----
-    reg  dsd_en = 0, pcm_en = 0;
-    wire db, dl, dr, dx, pb, pl, pd, px;
+    reg  dsd_en = 0, pcm_en = 0, dop_en = 0;
+    wire db, dl, dr, dx, pb, pl, pd, px, ob, ol, od, ox;
     tb_src #(.MODE(1), .FS(2822400.0), .PPM(31.0), .DSDN(DSDN),
              .T0(91.3)) fox_dsd (.en(dsd_en), .bclk(db), .lrck(dl), .sdata(dr), .dsd_on(dx));
     tb_src #(.MODE(0), .FS(44100.0), .PPM(-17.0), .FL(997.0), .FR(3001.0),
              .T0(47.9)) fox_pcm (.en(pcm_en), .bclk(pb), .lrck(pl), .sdata(pd), .dsd_on(px));
+    tb_src #(.MODE(2), .FS(176400.0), .PPM(31.0), .DSDN(DSDN),
+             .T0(63.1)) fox_dop (.en(dop_en), .bclk(ob), .lrck(ol), .sdata(od), .dsd_on(ox));
 
     // unrelated random bit stream (~2.9 Mbit/s) for the line that must be ignored
     reg [15:0] lf = 16'hACE1;
     always #171.3 lf = {lf[14:0], lf[15] ^ lf[13] ^ lf[12] ^ lf[10]};
     wire noise = lf[0];
 
-    wire fox_bclk = (db & dsd_en) | (pb & pcm_en);
-    wire fox_sdat = (dr & dsd_en) | (pd & pcm_en);
+    wire fox_bclk = (db & dsd_en) | (pb & pcm_en) | (ob & dop_en);
+    wire fox_sdat = (dr & dsd_en) | (pd & pcm_en) | (od & dop_en);
     wire fox_flag = dx;
-    // LRCK pin (25): PCM LRCK; in DSD - the left channel (old layout) or noise (D2)
-    wire fox_lrck = pcm_en ? pl : (dsd_en ? (FD ? noise : dl) : 1'b0);
+    // LRCK pin (25): PCM / DoP LRCK; in DSD - the left channel (old layout) or noise (D2)
+    wire fox_lrck = pcm_en ? pl : dop_en ? ol : (dsd_en ? (FD ? noise : dl) : 1'b0);
     // pin 27 (I2S_SDO1 / DSD_L): the left channel in DSD on D2, noise otherwise
     wire fox_dsdl = (FD && dsd_en) ? dl : noise;
 
@@ -108,6 +112,14 @@ module tb_dsdl;
         check(r0, 8'h80, "FORMAT"); check(r1, 8'h01, "RATE");
         #(5e6);
         capture(2, 4096, PFX);
+        // 3. Fox DoP64
+        pcm_en = 0; dop_en = 1;
+        wait_off(20.0);
+        wait_on(250.0);
+        rd_regs(8'h02, r0, r1, r2, r3);
+        check(r1, 8'h21, "RATE DoP64");
+        #(5e6);
+        capture(3, 4096, PFX);
         if (n_sel != 0 || dut.mclk_sel !== 1'b0) begin
             $display("ERROR: mclk_sel moved %0d times (one oscillator)", n_sel); errors = errors + 1;
         end

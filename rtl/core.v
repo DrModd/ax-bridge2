@@ -22,7 +22,7 @@
 module core #(
     parameter WBITS = 18,
     parameter GSH   = 0,
-    parameter SYNC_IN4 = 1,           // phono ADC (input 4) clocked from our MCLK: synchronous path
+    parameter SYNC_IN4 = 0,           // 1: phono ADC (input 4) clocked from our MCLK: synchronous path
     parameter COEF_DIR = "coef/"
 ) (
     input  wire        clk,            // MCLK

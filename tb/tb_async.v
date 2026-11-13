@@ -1,7 +1,7 @@
 `define AXB_SIM_PORTS   // top: bench ports (mclk_sel, fox_fsel, in3_dsd)
 `timescale 1ns/1fs
 // All-asynchronous mode, CLK_CTRL = 0x00 (tb/run_sys.py --async), with the
-// default SYNC_IN4 = 1 and CLK_CTRL = 0x0D after reset, so the mode is
+// SYNC_IN4 = 1 and CLK_CTRL = 0x0D after reset (set below), so the mode is
 // entered and left at run time like the STM32 does it.
 //   0. 0x0D: Fox 44.1k on our MCLK -> 45.1584 MHz, synchronous (setup)
 //   1. CLK_CTRL = 0x00, Fox on its own clock (44.1k +37 ppm), its MCLK_SEL
@@ -54,7 +54,7 @@ module tb_async;
     assign i2c_sda = sda_m ? 1'bz : 1'b0;
 
     wire obclk, olrck, osdata, audio_on;
-    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .TWO_OSC(1), .CLK_CTRL_RST(4'b1101)) dut (
+    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .TWO_OSC(1), .CLK_CTRL_RST(4'b1101), .SYNC_IN4(1)) dut (
         .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(mclk_sel), .fox_fsel(fox_fsel),
         .i2s_bclk_in(fb), .i2s_lrck_in(fl), .i2s_dsdl_in(fl), .i2s_sdata_in(fd), .dsd_on(1'b0),
         .spdif_in({3'b000, sp0}),

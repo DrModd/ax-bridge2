@@ -72,7 +72,7 @@ module tb_ratechg;
     assign i2c_sda = sda_m ? 1'bz : 1'b0;
     wire obclk, olrck, osdata, audio_on;
 `ifdef V2
-    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .TWO_OSC(1), .CLK_CTRL_RST(4'b1101)) dut (
+    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .TWO_OSC(1), .CLK_CTRL_RST(4'b1101), .SYNC_IN4(1)) dut (
         .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(mclk_sel), .fox_fsel(1'b0),
 `else
     top #(.WBITS(16), .GSH(4)) dut (
