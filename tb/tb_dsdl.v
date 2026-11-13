@@ -63,7 +63,12 @@ module tb_dsdl;
         .audio_on(audio_on));
 
     integer n_sel = 0;
-    always @(dut.mclk_sel) if ($realtime > 0) n_sel = n_sel + 1;
+    // count real switches only: the reset that takes the register from X to 0 is not one
+    reg sel_q = 1'bx;
+    always @(dut.mclk_sel) begin
+        if (sel_q === 1'b0 || sel_q === 1'b1) n_sel = n_sel + 1;
+        sel_q = dut.mclk_sel;
+    end
 
     `include "tb_v2_tasks.vh"
 
