@@ -41,21 +41,34 @@ module top #(
     parameter integer CLK_SETTLE_MS = 20, // oscillator start-up after a switch
     parameter integer ACK_WAIT_MS = 300,  // STM32 acknowledge time-out
     parameter MWBITS = 18,                // frequency meter window 2^MWBITS sys clocks
-    parameter [3:0] CLK_CTRL_RST = 4'b1101,   // CLK_CTRL after reset (0x14); 4'b0000 = fixed 49.152 MHz, no sync path
+    // DigiD D2 board (NAXF): ONE oscillator, 49.152 MHz; no mclk_sel, no fox_fsel.
+    // TWO_OSC = 0 locks CLK_CTRL [0] (auto) and [1] (manual 44.1) to 0, so
+    // mclk_sel never leaves 0. TWO_OSC = 1 + CLK_CTRL_RST = 4'b1101: the
+    // two-oscillator clock manager (benches v2 / sync4 / async).
+    parameter TWO_OSC = 0,
+    parameter [3:0] CLK_CTRL_RST = 4'b0000,   // CLK_CTRL after reset (0x14); 0x00 = all-async, 49.152 MHz fixed
+    // Fox native DSD, left channel: 1 = own line i2s_dsdl_in (Fox pin 27,
+    // I2S_SDO1, D2 board); 0 = old three-wire Amanero layout, left on the
+    // LRCK pin. PCM and DoP always use LRCK.
+    parameter FOX_DSDL = 1,
     parameter COEF_DIR = "coef/"
 ) (
     input  wire sys_clk,        // 50 MHz service clock
     input  wire mclk_in,        // audio MCLK (45.1584 / 49.152 MHz)
+`ifdef AXB_SIM_PORTS
+    // not on the D2 board: ports only for the benches (two-oscillator model)
     output reg  mclk_sel,       // 1: 45.1584 MHz, 0: 49.152 MHz (same polarity as the Fox's MCLK_SEL)
     input  wire fox_fsel,       // Fox MCLK_SEL (GPIO1_D1): 1 = 44.1 kHz family
-    input  wire i2s_bclk_in,    // input 0 (Fox): BCLK / DSD bit clock
-    input  wire i2s_lrck_in,
-    input  wire i2s_sdata_in,
-    input  wire dsd_on,
+    input  wire in3_dsd,        // HDMI native-DSD flag pin
+`endif
+    input  wire i2s_bclk_in,    // input 0 (Fox): BCLK / DSD bit clock (pin 24)
+    input  wire i2s_lrck_in,    //   LRCK (pin 25)
+    input  wire i2s_sdata_in,   //   PCM data / DSD right (pin 29)
+    input  wire i2s_dsdl_in,    //   DSD left (pin 27, I2S_SDO1), FOX_DSDL = 1
+    input  wire dsd_on,         //   native-DSD flag (pin 19)
     input  wire [3:0] spdif_in, // input 1: 0 coax, 1 optical, 2 AES/EBU, 3 HDMI ARC
     input  wire in2_bclk, in2_lrck, in2_sdata,
     input  wire in3_bclk, in3_lrck, in3_sdata,
-    input  wire in3_dsd,
     input  wire in4_bclk, in4_lrck, in4_sdata,
     input  wire i2c_scl,
     inout  wire i2c_sda,
@@ -65,6 +78,13 @@ module top #(
     output wire audio_on
 );
     localparam integer MS = SYS_HZ / 1000;
+`ifndef AXB_SIM_PORTS
+    // D2 board: one oscillator, no HDMI DSD flag pin (DSD on HDMI is found
+    // by auto-detection, DSD_MODE bit 7, on after reset)
+    reg  mclk_sel;
+    wire fox_fsel = 1'b0;
+    wire in3_dsd  = 1'b0;
+`endif
 
     // ================= service domain (sys_clk) =================
     reg [7:0] por = 8'd0;
@@ -79,6 +99,7 @@ module top #(
     reg  [7:0] ctl_dmode;
     reg  [3:0] ctl_dinv, ctl_dswap;
     reg  [3:0] ctl_clk;          // [0] auto, [1] manual family (1 = 44.1), [2] sync Fox, [3] wait for ack
+    localparam [3:0] CLK_MASK = (TWO_OSC != 0) ? 4'b1111 : 4'b1100;
 
     // ---------------- input selection state ----------------
     reg  [2:0] sel_cur;
@@ -89,11 +110,16 @@ module top #(
 
     // ---------------- front end (input clocks) ----------------
     wire m_bclk, m_lrck, m_sdata, m_dsd, m_dauto, m_drs;
+    // Fox native DSD (flag on, flag used): left channel from its own line.
+    // Same condition as the flag inside in_mux, so the line follows the
+    // format; swapping by DSD_CFG works as before ("LRCK" = this line).
+    wire fox_dsd_flag = ctl_dmode[0] & (dsd_on ^ ctl_dinv[0]);
+    wire fox_l = (FOX_DSDL != 0 && fox_dsd_flag) ? i2s_dsdl_in : i2s_lrck_in;
     wire [4:0] mux_active;
     in_mux #(.USE_DCS(USE_DCS)) u_mux (
         .clk(sys_clk), .rst_n(rst_n), .sel(sel_cur),
         .bclk_in({in4_bclk, in3_bclk, in2_bclk, 1'b0, i2s_bclk_in}),   // input 1: S/PDIF
-        .lrck_in({in4_lrck, in3_lrck, in2_lrck, 1'b0, i2s_lrck_in}),
+        .lrck_in({in4_lrck, in3_lrck, in2_lrck, 1'b0, fox_l}),
         .sdata_in({in4_sdata, in3_sdata, in2_sdata, 1'b0, i2s_sdata_in}),
         .dsd_on0(dsd_on), .dsd_on3(in3_dsd),
         .dsd_mode(ctl_dmode), .dsd_inv(ctl_dinv), .dsd_swap(ctl_dswap),
@@ -317,7 +343,7 @@ module top #(
     // 0x03 RATE    r   0 none; PCM 1..10 = 44.1..768; 0x11..0x14 DSD64..512; 0x21..0x23 DoP (+0x08 48k)
     // 0x04 PLL     r   DPLL gear 0..4 (4 = synchronous path, no ASRC)
     // 0x05 ID      r   0xA5
-    // 0x06 VERSION r   0x20 (ax-bridge2)
+    // 0x06 VERSION r   0x21 (ax-bridge2; 0x21: D2 board pins, DSD left line, one oscillator)
     // 0x07 ATT     rw  PCM headroom 0..12 x 0.5 dB
     // 0x08 CLIP    r   [0] within ~85 ms, [7] sticky (w: clear)
     // 0x09..0x0C   EQ (as ax-bridge; coefficients for the CURRENT output rate,
@@ -329,7 +355,9 @@ module top #(
     // 0x14 CLK_CTRL rw [0] auto (1), [1] manual family when auto = 0 (1 = 44.1 kHz,
     //                  45.1584 MHz; only with [2] = 1), [2] synchronous path for
     //                  the Fox and the phono ADC (1), [3] wait for the STM32
-    //                  acknowledge before switching the clock (1); reset 0x0D.
+    //                  acknowledge before switching the clock (1); reset
+    //                  CLK_CTRL_RST (0x00 on D2). TWO_OSC = 0 (D2, one oscillator):
+    //                  [0] and [1] always read 0, writes to them are ignored.
     //                  Modes: 0x0D two oscillators, sync Fox/ADC, async inputs via
     //                  FIFO+ASRC 1:1 (default); 0x00 ALL-ASYNC: 49.152 MHz fixed,
     //                  192 kHz out, every input (Fox and ADC too) through the full
@@ -357,7 +385,7 @@ module top #(
             ctl_sel <= 3'd0; ctl_sline <= 2'd0; ctl_mute <= 1'b0; ctl_att <= ATT_DEFAULT;
             ctl_dmode <= 8'hC1; ctl_dinv <= 4'd0;
             ctl_dswap <= {3'b111, (DSD_SDATA_IS_RIGHT != 0)};
-            ctl_clk <= CLK_CTRL_RST;
+            ctl_clk <= CLK_CTRL_RST & CLK_MASK;
             ack <= 1'b0;
         end else begin
             ack <= 1'b0;
@@ -367,7 +395,7 @@ module top #(
                 8'h0D: ctl_dmode <= i2c_wdata;
                 8'h0E: begin ctl_dswap <= i2c_wdata[3:0]; ctl_dinv <= i2c_wdata[7:4]; end
                 8'h10: ctl_sline <= i2c_wdata[1:0];
-                8'h14: ctl_clk <= i2c_wdata[3:0];
+                8'h14: ctl_clk <= i2c_wdata[3:0] & CLK_MASK;
                 8'h15: ack <= i2c_wdata[0];
                 default: ;
             endcase
@@ -439,7 +467,7 @@ module top #(
             8'h03: i2c_rd = rate_code;
             8'h04: i2c_rd = {5'd0, cst_q[10:8]};
             8'h05: i2c_rd = 8'hA5;
-            8'h06: i2c_rd = 8'h20;
+            8'h06: i2c_rd = 8'h21;
             8'h07: i2c_rd = {4'd0, ctl_att};
             8'h08: i2c_rd = {clip_sticky, 6'd0, cst_q[11]};
             8'h09: i2c_rd = {cst_q[17:14], 2'd0, cst_q[18], cst_q[19]};

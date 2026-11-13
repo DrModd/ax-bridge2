@@ -1,3 +1,4 @@
+`define AXB_SIM_PORTS   // top: bench ports (mclk_sel, fox_fsel, in3_dsd)
 `timescale 1ns/1fs
 // Source changes its sample rate on the fly (next track on a CD transport /
 // streamer): the S/PDIF line keeps toggling, rate changes at a frame
@@ -71,13 +72,13 @@ module tb_ratechg;
     assign i2c_sda = sda_m ? 1'bz : 1'b0;
     wire obclk, olrck, osdata, audio_on;
 `ifdef V2
-    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20)) dut (
+    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .TWO_OSC(1), .CLK_CTRL_RST(4'b1101)) dut (
         .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(mclk_sel), .fox_fsel(1'b0),
 `else
     top #(.WBITS(16), .GSH(4)) dut (
         .mclk_in(mclk),
 `endif
-        .i2s_bclk_in(1'b0), .i2s_lrck_in(1'b0), .i2s_sdata_in(1'b0), .dsd_on(1'b0),
+        .i2s_bclk_in(1'b0), .i2s_lrck_in(1'b0), .i2s_dsdl_in(1'b0), .i2s_sdata_in(1'b0), .dsd_on(1'b0),
         .spdif_in({3'b000, sp0}),
         .in2_bclk(1'b0), .in2_lrck(1'b0), .in2_sdata(1'b0),
         .in3_bclk(1'b0), .in3_lrck(1'b0), .in3_sdata(1'b0), .in3_dsd(1'b0),

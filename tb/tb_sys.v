@@ -1,3 +1,4 @@
+`define AXB_SIM_PORTS   // top: bench ports (mclk_sel, fox_fsel, in3_dsd)
 `timescale 1ns/1fs
 // System bench: behavioural transport (own clock with a ppm offset) ->
 // top -> I2S output decoded from the pins and dumped to build/sys_out.txt
@@ -96,7 +97,7 @@ module tb_sys;
     wire obclk, olrck, osdata, audio_on;
     tri1 i2c_sda;
     top #(.CLK_CTRL_RST(4'b0000), .WBITS(TB_WBITS), .GSH(TB_GSH), .ATT_DEFAULT(ATT)) dut (
-        .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0), .i2s_bclk_in(bclk), .i2s_lrck_in(lrck),
+        .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0), .i2s_bclk_in(bclk), .i2s_lrck_in(lrck), .i2s_dsdl_in(lrck),
         .i2s_sdata_in(sdata), .dsd_on(dsd_on),
         .spdif_in(4'b0000),
         .in2_bclk(1'b0), .in2_lrck(1'b0), .in2_sdata(1'b0),

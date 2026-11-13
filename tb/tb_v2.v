@@ -1,3 +1,4 @@
+`define AXB_SIM_PORTS   // top: bench ports (mclk_sel, fox_fsel, in3_dsd)
 `timescale 1ns/1fs
 // ax-bridge2 clock architecture (tb/run_sys.py --v2):
 //   two oscillators 45.1584 / 49.152 MHz behind a multiplexer driven by
@@ -73,9 +74,9 @@ module tb_v2;
     wire obclk, olrck, osdata, audio_on;
     // SYNC_IN4 = 0: this bench drives the phono input from its own +17 ppm clock
     // (old AK5572 master with a crystal) to exercise the ASRC path.
-    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .SYNC_IN4(0)) dut (
+    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .SYNC_IN4(0), .TWO_OSC(1), .CLK_CTRL_RST(4'b1101)) dut (
         .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(mclk_sel), .fox_fsel(fox_fsel),
-        .i2s_bclk_in(fb), .i2s_lrck_in(fl), .i2s_sdata_in(fd), .dsd_on(fox_dsd),
+        .i2s_bclk_in(fb), .i2s_lrck_in(fl), .i2s_dsdl_in(fl), .i2s_sdata_in(fd), .dsd_on(fox_dsd),
         .spdif_in({3'b000, sp0}),
         .in2_bclk(1'b0), .in2_lrck(1'b0), .in2_sdata(1'b0),
         .in3_bclk(1'b0), .in3_lrck(1'b0), .in3_sdata(1'b0), .in3_dsd(1'b0),
@@ -229,7 +230,7 @@ module tb_v2;
     initial begin
         #(3e6);
         rd_regs(8'h05, r0, r1, r2, r3);
-        check(r0, 8'hA5, "ID"); check(r1, 8'h20, "VERSION");
+        check(r0, 8'hA5, "ID"); check(r1, 8'h21, "VERSION");
         // 1. Fox PCM 44.1k
         fox_fs = 44100.0; fox_div = 16; fox_fsel = 1; fox_en = 1;
         ack_switch(40.0);

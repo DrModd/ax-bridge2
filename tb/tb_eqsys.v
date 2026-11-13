@@ -1,3 +1,4 @@
+`define AXB_SIM_PORTS   // top: bench ports (mclk_sel, fox_fsel, in3_dsd)
 `timescale 1ns/1fs
 // EQ through the whole bridge (tb/run_sys.py --eq). PCM 96 kHz on input 0.
 // Bank 1 (build/eqsys_b1.hex: byte stream for EQ_DATA) is loaded over I2C
@@ -23,7 +24,7 @@ module tb_eqsys;
     wire obclk, olrck, osdata, audio_on;
     top #(.CLK_CTRL_RST(4'b0000), .WBITS(16), .GSH(4)) dut (
         .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0),
-        .i2s_bclk_in(b0), .i2s_lrck_in(l0), .i2s_sdata_in(d0), .dsd_on(dsd0),
+        .i2s_bclk_in(b0), .i2s_lrck_in(l0), .i2s_dsdl_in(l0), .i2s_sdata_in(d0), .dsd_on(dsd0),
         .spdif_in(4'b0000),
         .in2_bclk(1'b0), .in2_lrck(1'b0), .in2_sdata(1'b0),
         .in3_bclk(1'b0), .in3_lrck(1'b0), .in3_sdata(1'b0), .in3_dsd(1'b0),
@@ -162,7 +163,7 @@ module tb_eqsys;
         $readmemh("build/eqsys_b1.hex", blk);
         #(2e6);
         rd_regs(8'h05, r0, r1, r2, r3);
-        check(r0, 8'hA5, "ID"); check(r1, 8'h20, "VERSION");
+        check(r0, 8'hA5, "ID"); check(r1, 8'h21, "VERSION");
         rd_regs(8'h09, r0, r1, r2, r3);
         check(r0, 8'h00, "EQ_CTRL");
         // ax-bridge2: EQ writes reach the audio core only while it runs (CLK_STAT[6])

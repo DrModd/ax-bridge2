@@ -1,3 +1,4 @@
+`define AXB_SIM_PORTS   // top: bench ports (mclk_sel, fox_fsel, in3_dsd)
 `timescale 1ns/1fs
 // Input switch + I2C bench. Five transports run at the same time on
 // unrelated clocks:  in0 DSD64 (Fox, native), in1 S/PDIF 44.1, in2 PCM 96,
@@ -33,7 +34,7 @@ module tb_mux;
     wire obclk, olrck, osdata, audio_on;
     top #(.CLK_CTRL_RST(4'b0000), .WBITS(16), .GSH(4)) dut (
         .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(), .fox_fsel(1'b0),
-        .i2s_bclk_in(b0), .i2s_lrck_in(l0), .i2s_sdata_in(d0), .dsd_on(dsd0),
+        .i2s_bclk_in(b0), .i2s_lrck_in(l0), .i2s_dsdl_in(l0), .i2s_sdata_in(d0), .dsd_on(dsd0),
         .spdif_in({3'b000, sp1}),
         .in2_bclk(b2), .in2_lrck(l2), .in2_sdata(d2),
         .in3_bclk(b3), .in3_lrck(l3), .in3_sdata(d3), .in3_dsd(1'b0),
@@ -154,7 +155,7 @@ module tb_mux;
     initial begin
         #(5e6);
         rd_regs(8'h05, r0, r1, r2, r3);
-        check(r0, 8'hA5, "ID"); check(r1, 8'h20, "VERSION");
+        check(r0, 8'hA5, "ID"); check(r1, 8'h21, "VERSION");
         // input 0 (default): DSD64
         wait_on(60.0);
         rd_regs(8'h00, r0, r1, r2, r3);

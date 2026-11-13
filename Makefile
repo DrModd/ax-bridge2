@@ -4,12 +4,12 @@ SHELL := /bin/bash
 RTL := rtl/mem.v rtl/afifo.v rtl/in_mux.v rtl/bclk_rx.v rtl/spdif_rx.v rtl/rate_mon.v rtl/dop_det.v \
        rtl/cic5_dsd.v rtl/fir_csd.v rtl/asrc.v rtl/i2s_tx32.v rtl/i2c_slave.v rtl/eq_biquad.v rtl/core.v rtl/top.v
 
-.PHONY: all verify coef units csd v2 eq eqsys hdmi spdif spdif_stress corner sys switch mux clip recover lint synth jf jf_audio clean
+.PHONY: all verify coef units csd v2 dsdl eq eqsys hdmi spdif spdif_stress corner sys switch mux clip recover lint synth jf jf_audio clean
 
 all: verify
 
 # Everything that must be green before flashing.
-verify: coef lint units csd eq corner synth sys switch mux clip recover eqsys hdmi spdif v2 sync4 async spdif_stress
+verify: coef lint units csd eq corner synth sys switch mux clip recover eqsys hdmi spdif v2 sync4 async dsdl spdif_stress
 
 coef:
 	python3 tools/gen_coefs.py --check
@@ -78,6 +78,12 @@ v2:
 # follows a forced switch (CLK_CTRL 0x04) and survives the return to 0x0D.
 sync4:
 	python3 tb/run_sys.py --sync4
+
+# Fox native DSD with the left channel on its own line (D2, FOX_DSDL = 1)
+# and the old three-wire layout (FOX_DSDL = 0); top with the D2 board ports,
+# the ignored line carries noise; L/R tones, the DSD_CFG swap, PCM 44.1k.
+dsdl:
+	python3 tb/run_sys.py --dsdl
 
 # All-async mode entered and left at run time (CLK_CTRL 0x0D -> 0x00 -> 0x0D):
 # 49.152 MHz fixed, Fox 44.1/96 on its own clock, S/PDIF 44.1 and the

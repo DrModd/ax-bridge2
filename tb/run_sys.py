@@ -303,7 +303,7 @@ def run_v2():
         print(f"{'PASS' if c else 'FAIL'} v2 seg{seg} {what:18s}: " + " | ".join(res))
     return ok
 
-def run_bench(top, pfx, segs, srcs=("tb_sync_src.v",)):
+def run_bench(top, pfx, segs, srcs=("tb_sync_src.v",), params=()):
     """Compile and run a self-checking clock bench (tb/<top>.v), then check
     every captured segment: frequency, level and THD+N per channel.
     segs: (seg, fs out, ppm, fl, fr, level dBFS, THD+N limit, what)."""
@@ -313,7 +313,7 @@ def run_bench(top, pfx, segs, srcs=("tb_sync_src.v",)):
         if os.path.exists(p):
             os.remove(p)
     r = subprocess.run(["iverilog", "-g2005", "-Wall", "-I", os.path.join(ROOT, "tb"), "-o", exe,
-                        "-s", top, os.path.join(ROOT, "tb", f"{top}.v")]
+                        "-s", top] + list(params) + [os.path.join(ROOT, "tb", f"{top}.v")]
                        + [os.path.join(ROOT, "tb", s) for s in srcs] + RTL,
                        cwd=ROOT, capture_output=True, text=True)
     if r.returncode:
@@ -365,6 +365,24 @@ def run_async():
         (3, 192000.0, 0.0, 1201.0, 4001.0, -1.0, -110.0, "phono (our MCLK) ASRC"),
         (4, 176400.0, 0.0, 997.0, 3001.0, -1.0, -120.0, "back to 0x0D: Fox sync"),
     ], srcs=("tb_sync_src.v", "tb_src.v", "tb_spdif_src.v"))
+
+def run_dsdl():
+    """Fox native DSD, left channel on its own line (D2, FOX_DSDL = 1) and the
+    old three-wire layout (FOX_DSDL = 0); top with the D2 board ports. The
+    line that must be ignored carries noise. L 1000 / R 3000 Hz, then the
+    DSD_CFG swap (L 3000 / R 1000), then PCM 44.1k on the same pins."""
+    import shutil
+    cache = dsd_cache_1k()
+    shutil.copy(cache, os.path.join(B, "dsd.hex"))
+    n = sum(1 for _ in open(cache))
+    ok = True
+    for fd in (1, 0):
+        ok &= run_bench("tb_dsdl", f"dl{fd}", [
+            (0, 192000.0, 31.0, 1000.0, 3000.0, -6.02, -95.0, "DSD64 L/R"),
+            (1, 192000.0, 31.0, 3000.0, 1000.0, -6.02, -95.0, "DSD64 swapped (0x0E)"),
+            (2, 192000.0, -17.0, 997.0, 3001.0, -1.0, -110.0, "PCM 44.1k same pins"),
+        ], srcs=("tb_src.v",), params=(f"-Ptb_dsdl.FD={fd}", f"-Ptb_dsdl.DSDN={n}"))
+    return ok
 
 def run_clip():
     """Inter-sample-peak test: L = fs/4 sine at 45 deg, samples exactly at
@@ -506,6 +524,8 @@ if __name__ == "__main__":
         sys.exit(0 if run_sync4() else 1)
     if sys.argv[1:2] == ["--async"]:
         sys.exit(0 if run_async() else 1)
+    if sys.argv[1:2] == ["--dsdl"]:
+        sys.exit(0 if run_dsdl() else 1)
     if sys.argv[1:2] == ["--spdif"]:
         sys.exit(0 if run_spdif() else 1)
     if sys.argv[1:2] == ["--mux"]:

@@ -1,3 +1,4 @@
+`define AXB_SIM_PORTS   // top: bench ports (mclk_sel, fox_fsel, in3_dsd)
 `timescale 1ns/1fs
 // Synchronous phono ADC, SYNC_IN4 = 1 (tb/run_sys.py --sync4).
 // The AK5572 is an I2S master but gets its MCLK from the bridge's own
@@ -38,9 +39,9 @@ module tb_sync4;
     assign i2c_sda = sda_m ? 1'bz : 1'b0;
 
     wire obclk, olrck, osdata, audio_on;
-    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .SYNC_IN4(1)) dut (
+    top #(.WBITS(16), .GSH(4), .MWBITS(16), .CLK_SETTLE_MS(2), .ACK_WAIT_MS(20), .SYNC_IN4(1), .TWO_OSC(1), .CLK_CTRL_RST(4'b1101)) dut (
         .sys_clk(sclk), .mclk_in(mclk), .mclk_sel(mclk_sel), .fox_fsel(fox_fsel),
-        .i2s_bclk_in(fb), .i2s_lrck_in(fl), .i2s_sdata_in(fd), .dsd_on(1'b0),
+        .i2s_bclk_in(fb), .i2s_lrck_in(fl), .i2s_dsdl_in(fl), .i2s_sdata_in(fd), .dsd_on(1'b0),
         .spdif_in(4'b0000),
         .in2_bclk(1'b0), .in2_lrck(1'b0), .in2_sdata(1'b0),
         .in3_bclk(1'b0), .in3_lrck(1'b0), .in3_sdata(1'b0), .in3_dsd(1'b0),
@@ -74,7 +75,7 @@ module tb_sync4;
     initial begin
         #(3e6);
         rd_regs(8'h05, r0, r1, r2, r3);
-        check(r0, 8'hA5, "ID"); check(r1, 8'h20, "VERSION");
+        check(r0, 8'hA5, "ID"); check(r1, 8'h21, "VERSION");
         rd_regs(8'h14, r0, r1, r2, r3);
         check(r0, 8'h0D, "CLK_CTRL");
         // 1. phono on the reset oscillator (49.152 MHz)
